@@ -129,9 +129,34 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setRole('owner');
         return { success: true };
       }
+
+      // Check server verification for newly added admin accounts
+      try {
+        const verifyResp = await fetch('/api/admin/verify-login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: cleanEmail, password: pass }),
+        });
+        if (verifyResp.ok) {
+          const verifyData = await verifyResp.json();
+          if (verifyData.user) {
+            sessionStorage.setItem('azryl_simulated_role', 'admin');
+            setUserProfile(verifyData.user);
+            setRole('admin');
+            return { success: true };
+          }
+        } else if (verifyResp.status === 403) {
+          return { success: false, error: 'Akun admin ini dinonaktifkan oleh Owner.' };
+        }
+      } catch (verifyErr) {
+        console.warn('Backend login verification check error:', verifyErr);
+      }
       
       const matchedLocalAdmin = getLocalUsers().find((u) => u.email.toLowerCase() === cleanEmail);
       if (matchedLocalAdmin && pass.length >= 6) {
+        if (!matchedLocalAdmin.active) {
+          return { success: false, error: 'Akun admin ini dinonaktifkan oleh Owner.' };
+        }
         sessionStorage.setItem('azryl_simulated_role', matchedLocalAdmin.role);
         setUserProfile(matchedLocalAdmin);
         setRole(matchedLocalAdmin.role);
