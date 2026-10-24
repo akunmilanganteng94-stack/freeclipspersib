@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { Search, Flame, Video, X, Sparkles, Download, Users, ArrowRight, Smartphone } from 'lucide-react';
 import { ClipItem, UserProfile, SiteSettings } from '../types';
 import { ClipCard } from '../components/ClipCard';
+import { INITIAL_USERS, getDeletedUserIds, getLocalUsers } from '../services/clipsService';
 
 interface HomePageProps {
   clips: ClipItem[];
@@ -43,6 +44,28 @@ export const HomePage: React.FC<HomePageProps> = ({ clips, admins, siteSettings,
   const totalDownloads = useMemo(() => {
     return clips.reduce((acc, curr) => acc + (curr.downloadCount || 0), 0);
   }, [clips]);
+
+  // Synchronized active admins (identically reflects additions, edits, and deletions)
+  const activeAdmins = useMemo(() => {
+    const deletedIds = getDeletedUserIds();
+    const sourceList = admins && admins.length > 0 ? admins : getLocalUsers();
+    const userMap = new Map<string, UserProfile>();
+
+    INITIAL_USERS.forEach((u) => {
+      if (!deletedIds.has(u.uid)) userMap.set(u.uid, u);
+    });
+
+    sourceList.forEach((u) => {
+      if (!deletedIds.has(u.uid)) {
+        userMap.set(u.uid, {
+          ...(userMap.get(u.uid) || {}),
+          ...u,
+        });
+      }
+    });
+
+    return Array.from(userMap.values()).filter((u) => !deletedIds.has(u.uid) && u.active !== false);
+  }, [admins]);
 
   return (
     <div className="space-y-8 sm:space-y-10">
@@ -360,22 +383,28 @@ export const HomePage: React.FC<HomePageProps> = ({ clips, admins, siteSettings,
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-          {admins.map((adm) => {
+          {activeAdmins.map((adm) => {
             const adminClipsCount = clips.filter((c) => c.uploaderUid === adm.uid).length;
             return (
               <div
                 key={adm.uid}
                 onClick={() => onNavigate(`/admin/${adm.uid}`)}
-                className="p-4 rounded-2xl bg-white shadow-xs border border-blue-100/80 hover:shadow-md transition-all cursor-pointer flex items-center gap-3.5"
+                className="p-4 rounded-2xl bg-white shadow-xs border border-blue-100/80 hover:shadow-md transition-all cursor-pointer flex items-center gap-3.5 group"
               >
                 <img
                   src={adm.profileImage || 'https://i.postimg.cc/4ysQFgqx/1366b69ba442d21911f314947331b50a.jpg'}
                   alt={adm.adminName}
-                  className="w-12 h-12 rounded-full object-cover border-2 border-blue-500/30 shrink-0"
+                  className="w-12 h-12 rounded-full object-cover border-2 border-blue-500/30 shrink-0 group-hover:border-blue-600 transition-colors"
                   referrerPolicy="no-referrer"
+                  onError={(e) => {
+                    const target = e.currentTarget;
+                    if (!target.src.includes('1366b69ba442d21911f314947331b50a')) {
+                      target.src = 'https://i.postimg.cc/4ysQFgqx/1366b69ba442d21911f314947331b50a.jpg';
+                    }
+                  }}
                 />
                 <div className="min-w-0 flex-1">
-                  <h4 className="font-bold text-sm text-slate-800 truncate">
+                  <h4 className="font-bold text-sm text-slate-800 truncate group-hover:text-blue-700 transition-colors">
                     {adm.adminName}
                   </h4>
                   <p className="text-[11px] text-blue-600 font-semibold uppercase tracking-wider">

@@ -169,33 +169,53 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
   // Create Admin Account
   const handleCreateAdmin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newAdminEmail || !newAdminPassword || !newAdminName) {
-      onShowToast('Harap isi semua kolom wajib!', 'error');
+    if (!newAdminEmail.trim() || !newAdminPassword || !newAdminName.trim()) {
+      onShowToast('Harap lengkapi semua kolom wajib (Nama, Email, Password)!', 'error');
+      return;
+    }
+
+    if (newAdminPassword.length < 6) {
+      onShowToast('Password baru admin minimal harus 6 karakter!', 'error');
       return;
     }
 
     setIsSubmittingAdmin(true);
     try {
-      const resp = await fetch('/api/admin/create-admin', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: newAdminEmail.trim(),
-          password: newAdminPassword,
-          adminName: newAdminName.trim(),
-          bio: newAdminBio.trim(),
-          tiktokUrl: newAdminTiktok.trim(),
-          instagramUrl: newAdminInstagram.trim(),
-          whatsappChannelUrl: newAdminWA.trim(),
-        }),
-      });
+      let adminUid = `admin_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+      let serverProfile: UserProfile | null = null;
 
-      const data = await resp.json();
-      const adminUid = data.uid || `admin_${Date.now()}`;
+      try {
+        const resp = await fetch('/api/admin/create-admin', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: newAdminEmail.trim(),
+            password: newAdminPassword,
+            adminName: newAdminName.trim(),
+            profileImage: newAdminProfileImage.trim(),
+            bio: newAdminBio.trim(),
+            tiktokUrl: newAdminTiktok.trim(),
+            instagramUrl: newAdminInstagram.trim(),
+            whatsappChannelUrl: newAdminWA.trim(),
+          }),
+        });
 
-      const newAdminProfile: UserProfile = {
+        if (resp.ok) {
+          const data = await resp.json();
+          if (data?.user) {
+            serverProfile = data.user;
+            adminUid = data.user.uid;
+          } else if (data?.uid) {
+            adminUid = data.uid;
+          }
+        }
+      } catch (backendErr) {
+        console.warn('Backend admin create notification:', backendErr);
+      }
+
+      const newAdminProfile: UserProfile = serverProfile || {
         uid: adminUid,
-        email: newAdminEmail.trim(),
+        email: newAdminEmail.trim().toLowerCase(),
         role: 'admin',
         adminName: newAdminName.trim(),
         profileImage: newAdminProfileImage.trim() || 'https://i.postimg.cc/4ysQFgqx/1366b69ba442d21911f314947331b50a.jpg',
@@ -209,7 +229,7 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
       };
 
       await saveUserProfile(newAdminProfile);
-      onShowToast(`Akun admin ${newAdminName} berhasil dibuat!`, 'success');
+      onShowToast(`Akun admin "${newAdminName}" berhasil dibuat dan langsung aktif!`, 'success');
 
       setShowAddAdminModal(false);
       setNewAdminEmail('');
@@ -253,6 +273,9 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
     }
     try {
       await deleteUserProfile(admin.uid);
+      if (editingAdmin?.uid === admin.uid) {
+        setEditingAdmin(null);
+      }
       onShowToast(`Akun admin ${admin.adminName} berhasil dihapus!`, 'success');
     } catch (err: any) {
       onShowToast('Gagal menghapus admin: ' + (err.message || 'Kesalahan sistem'), 'error');
@@ -969,6 +992,15 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
                         </td>
                         <td className="p-3.5 text-right">
                           <div className="flex items-center justify-end gap-1.5">
+                            {/* Tombol Lihat Profil Publik */}
+                            <button
+                              onClick={() => onNavigate(`/admin/${adm.uid}`)}
+                              className="p-1.5 rounded-lg text-blue-600 hover:bg-blue-50 cursor-pointer"
+                              title="Lihat Profil Publik Admin Ini"
+                            >
+                              <Eye className="w-4 h-4" />
+                            </button>
+
                             {/* Tombol Edit Admin */}
                             <button
                               onClick={() => setEditingAdmin(adm)}

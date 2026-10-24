@@ -2,7 +2,7 @@ import React from 'react';
 import { ArrowLeft, Video, MessageCircle, ExternalLink, ShieldCheck, Download } from 'lucide-react';
 import { UserProfile, ClipItem } from '../types';
 import { ClipCard } from '../components/ClipCard';
-import { getDeletedUserIds } from '../services/clipsService';
+import { getDeletedUserIds, getLocalUsers } from '../services/clipsService';
 
 interface AdminProfilePageProps {
   adminId: string;
@@ -19,22 +19,26 @@ export const AdminProfilePage: React.FC<AdminProfilePageProps> = ({
   onNavigate,
   onShowToast,
 }) => {
-  // Find admin by uid (excluding deleted admins)
+  // Find admin by uid (strictly excluding deleted admins)
   const deletedIds = getDeletedUserIds();
-  const validAdmins = admins.filter((a) => !deletedIds.has(a.uid));
-  const admin = validAdmins.find((a) => a.uid === adminId) || validAdmins[0];
+  const sourceList = admins && admins.length > 0 ? admins : getLocalUsers();
+  const validAdmins = sourceList.filter((a) => !deletedIds.has(a.uid));
+  const admin = validAdmins.find((a) => a.uid === adminId);
   const adminClips = clips.filter((c) => c.uploaderUid === admin?.uid && c.published);
   const totalDownloads = adminClips.reduce((acc, c) => acc + (c.downloadCount || 0), 0);
 
   if (!admin) {
     return (
       <div className="neu-card p-12 text-center bg-white space-y-4">
-        <h2 className="text-xl font-bold text-slate-800">Admin tidak ditemukan</h2>
+        <h2 className="text-xl font-bold text-slate-800">Admin tidak ditemukan atau telah dihapus</h2>
+        <p className="text-xs text-slate-500 max-w-sm mx-auto">
+          Akun admin ini mungkin sudah dinonaktifkan atau dihapus oleh Owner.
+        </p>
         <button
           onClick={() => onNavigate('/admin')}
           className="neu-button text-white px-5 py-2.5 rounded-xl text-xs font-bold"
         >
-          Kembali ke Daftar Admin
+          Lihat Semua Admin
         </button>
       </div>
     );

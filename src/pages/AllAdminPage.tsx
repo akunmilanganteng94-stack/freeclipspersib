@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { Users, Video, MessageCircle, ExternalLink, ShieldCheck } from 'lucide-react';
 import { UserProfile, ClipItem } from '../types';
-import { INITIAL_USERS, getDeletedUserIds } from '../services/clipsService';
+import { INITIAL_USERS, getDeletedUserIds, getLocalUsers } from '../services/clipsService';
 
 interface AllAdminPageProps {
   admins: UserProfile[];
@@ -10,23 +10,30 @@ interface AllAdminPageProps {
 }
 
 export const AllAdminPage: React.FC<AllAdminPageProps> = ({ admins, clips, onNavigate }) => {
-  // Pastikan seluruh admin dan owner muncul lengkap, kecuali yang sudah dihapus oleh Owner
+  // Pastikan seluruh admin dan owner muncul sinkron: ditambah, diedit, atau dihapus
   const allAdmins = useMemo(() => {
     const deletedIds = getDeletedUserIds();
+    const sourceList = admins && admins.length > 0 ? admins : getLocalUsers();
     const userMap = new Map<string, UserProfile>();
+
+    // 1. Initial base users
     INITIAL_USERS.forEach((u) => {
       if (!deletedIds.has(u.uid)) {
         userMap.set(u.uid, u);
       }
     });
-    if (admins && admins.length > 0) {
-      admins.forEach((u) => {
-        if (!deletedIds.has(u.uid)) {
-          userMap.set(u.uid, { ...userMap.get(u.uid), ...u });
-        }
-      });
-    }
-    return Array.from(userMap.values()).filter((u) => !deletedIds.has(u.uid));
+
+    // 2. Overlay sourceList (contains all new, edited, and active admins)
+    sourceList.forEach((u) => {
+      if (!deletedIds.has(u.uid)) {
+        userMap.set(u.uid, {
+          ...(userMap.get(u.uid) || {}),
+          ...u,
+        });
+      }
+    });
+
+    return Array.from(userMap.values()).filter((u) => !deletedIds.has(u.uid) && u.active !== false);
   }, [admins]);
 
   return (
