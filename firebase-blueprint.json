@@ -1,0 +1,108 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "Admin or Owner profile of AZRYL CLIPS",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "role": { "type": "string", "enum": ["owner", "admin"] },
+        "adminName": { "type": "string", "maxLength": 100 },
+        "profileImage": { "type": "string" },
+        "bio": { "type": "string", "maxLength": 500 },
+        "tiktokUrl": { "type": "string" },
+        "instagramUrl": { "type": "string" },
+        "whatsappChannelUrl": { "type": "string" },
+        "otherSocialLinks": { "type": "string" },
+        "active": { "type": "boolean" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["uid", "email", "role", "adminName", "active"]
+    },
+    "Clip": {
+      "title": "Clip",
+      "description": "A single clip containing 3 media files (1 primary video/photo, photo 1, photo 2)",
+      "type": "object",
+      "properties": {
+        "clipId": { "type": "string" },
+        "slug": { "type": "string" },
+        "title": { "type": "string", "maxLength": 200 },
+        "creatorName": { "type": "string", "maxLength": 100 },
+        "description": { "type": "string", "maxLength": 1000 },
+        "uploaderUid": { "type": "string" },
+        "uploaderNameSnapshot": { "type": "string" },
+        "primaryMediaType": { "type": "string", "enum": ["video", "photo"] },
+        "primaryMediaUrl": { "type": "string" },
+        "primaryMediaPath": { "type": "string" },
+        "photoOneUrl": { "type": "string" },
+        "photoOnePath": { "type": "string" },
+        "photoTwoUrl": { "type": "string" },
+        "photoTwoPath": { "type": "string" },
+        "downloadCount": { "type": "number" },
+        "published": { "type": "boolean" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": [
+        "clipId",
+        "slug",
+        "title",
+        "creatorName",
+        "uploaderUid",
+        "primaryMediaType",
+        "primaryMediaUrl",
+        "photoOneUrl",
+        "photoTwoUrl",
+        "downloadCount",
+        "published"
+      ]
+    },
+    "DownloadEvent": {
+      "title": "DownloadEvent",
+      "description": "Log entry of a clip media download event",
+      "type": "object",
+      "properties": {
+        "eventId": { "type": "string" },
+        "clipId": { "type": "string" },
+        "mediaType": { "type": "string" },
+        "timestamp": { "type": "string" },
+        "requestId": { "type": "string" }
+      },
+      "required": ["eventId", "clipId", "mediaType", "timestamp"]
+    },
+    "Settings": {
+      "title": "Settings",
+      "description": "Website settings and configuration managed by the Owner",
+      "type": "object",
+      "properties": {
+        "siteName": { "type": "string" },
+        "description": { "type": "string" },
+        "footerText": { "type": "string" },
+        "watermarkText": { "type": "string" },
+        "maintenanceMode": { "type": "boolean" },
+        "announcement": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      }
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profiles (Owner and Admins) with public contact info and permissions"
+    },
+    "/clips/{clipId}": {
+      "schema": "Clip",
+      "description": "Persib Bandung video and photo clips uploaded by admins and managed by owner"
+    },
+    "/downloadEvents/{eventId}": {
+      "schema": "DownloadEvent",
+      "description": "Audit and idempotency log of download actions"
+    },
+    "/settings/{settingId}": {
+      "schema": "Settings",
+      "description": "Site-wide configuration and metadata"
+    }
+  }
+}
