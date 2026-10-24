@@ -33,33 +33,6 @@ export const INITIAL_USERS: UserProfile[] = [
     createdAt: new Date(Date.now() - 3600000 * 24 * 30).toISOString(),
     updatedAt: new Date().toISOString(),
   },
-  {
-    uid: 'dadan-admin-uid',
-    email: 'dadan@azrylclips.com',
-    role: 'admin',
-    adminName: 'Kang Dadan Persib',
-    profileImage: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=300&h=300&fit=crop',
-    bio: 'Photographer & Video Editor resmi komunitas Bobotoh. Mengabadikan setiap jengkal perjuangan Pangeran Biru di atas lapangan hijau.',
-    tiktokUrl: 'https://www.tiktok.com/@dadan_persib',
-    instagramUrl: 'https://www.instagram.com/dadan_persib',
-    whatsappChannelUrl: 'https://whatsapp.com/channel/dadan-persib',
-    active: true,
-    createdAt: new Date(Date.now() - 3600000 * 24 * 15).toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    uid: 'angga-admin-uid',
-    email: 'angga@azrylclips.com',
-    role: 'admin',
-    adminName: 'Angga Maung',
-    profileImage: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=300&h=300&fit=crop',
-    bio: 'Matchday videographer. Spesialis video slow-motion selebrasi gol dan chant Bobotoh tribun timur.',
-    tiktokUrl: 'https://www.tiktok.com/@anggamaung33',
-    instagramUrl: 'https://www.instagram.com/anggamaung',
-    active: true,
-    createdAt: new Date(Date.now() - 3600000 * 24 * 10).toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
 ];
 
 export const DEFAULT_SETTINGS: SiteSettings = {
@@ -121,6 +94,20 @@ export function notifyUsersSubscribers() {
       cb(users);
     } catch (e) {
       console.warn('Error in user subscriber callback:', e);
+    }
+  });
+}
+
+// In-app subscribers for instant 0ms real-time clip updates
+const clipsSubscribers = new Set<(clips: ClipItem[]) => void>();
+
+export function notifyClipsSubscribers() {
+  const clips = getLocalClips();
+  clipsSubscribers.forEach((cb) => {
+    try {
+      cb(clips);
+    } catch (e) {
+      console.warn('Error in clips subscriber callback:', e);
     }
   });
 }
@@ -325,9 +312,52 @@ export async function toggleClipLike(clipId: string): Promise<{ liked: boolean; 
 }
 
 /**
- * Subscribe to real-time clips updates
+ * Subscribe to real-time clips updates with auto-refresh on changes
  */
 export function subscribeToClips(callback: (clips: ClipItem[]) => void): () => void {
+  // 1. Register in in-app subscriber set for instant 0ms updates
+  clipsSubscribers.add(callback);
+
+  // 2. Synchronously emit current local clips with zero delay
+  try {
+    callback(getLocalClips());
+  } catch (e) {}
+
+  // 3. Initial sync and periodic polling from server (every 3.5 seconds)
+  const syncServerClips = async () => {
+    try {
+      const resp = await fetch('/api/clips/list');
+      if (resp.ok) {
+        const serverClips = await resp.json();
+        if (Array.isArray(serverClips) && serverClips.length > 0) {
+          const localClips = getLocalClips();
+          const clipMap = new Map<string, ClipItem>();
+          // Combine local and server clips
+          localClips.forEach((c) => clipMap.set(c.clipId, c));
+          serverClips.forEach((c) => {
+            const existing = clipMap.get(c.clipId);
+            clipMap.set(c.clipId, {
+              ...existing,
+              ...c,
+              primaryMediaUrl: sanitizeMediaUrl(c.primaryMediaUrl),
+              photoOneUrl: sanitizeMediaUrl(c.photoOneUrl),
+              photoTwoUrl: sanitizeMediaUrl(c.photoTwoUrl),
+            });
+          });
+          const merged = Array.from(clipMap.values()).sort(
+            (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+          );
+          saveLocalClips(merged);
+          callback(merged);
+        }
+      }
+    } catch (e) {}
+  };
+
+  syncServerClips();
+  const intervalId = setInterval(syncServerClips, 3500);
+
+  // 4. Firestore snapshot listener
   try {
     const clipsCol = collection(db, 'clips');
     const q = query(clipsCol, orderBy('createdAt', 'desc'));
@@ -342,21 +372,23 @@ export function subscribeToClips(callback: (clips: ClipItem[]) => void): () => v
           });
           saveLocalClips(list);
           callback(list);
-        } else {
-          // If Firestore is still empty, deliver initialized clips
-          callback(getLocalClips());
         }
       },
       (error) => {
         handleFirestoreError(error, OperationType.LIST, 'clips');
-        callback(getLocalClips());
       }
     );
 
-    return unsubscribe;
+    return () => {
+      clipsSubscribers.delete(callback);
+      clearInterval(intervalId);
+      unsubscribe();
+    };
   } catch (err) {
-    callback(getLocalClips());
-    return () => {};
+    return () => {
+      clipsSubscribers.delete(callback);
+      clearInterval(intervalId);
+    };
   }
 }
 
@@ -644,7 +676,7 @@ export async function uploadMediaFile(
 }
 
 /**
- * Publish a new clip (Admin/Owner action) - optimized for instant loading
+ * Publish a new clip (Admin/Owner action) - optimized for instant loading & auto-refresh
  */
 export async function createNewClip(clipData: Omit<ClipItem, 'clipId' | 'downloadCount' | 'likeCount' | 'createdAt'>): Promise<ClipItem> {
   const clipId = `clip_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
@@ -664,7 +696,17 @@ export async function createNewClip(clipData: Omit<ClipItem, 'clipId' | 'downloa
   const updated = [newClip, ...current];
   saveLocalClips(updated);
 
-  // 2. Save to Firestore asynchronously in background
+  // 2. Refresh all React listeners automatically with 0ms delay!
+  notifyClipsSubscribers();
+
+  // 3. Save to backend server API
+  fetch('/api/clips/save', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(newClip),
+  }).catch(() => {});
+
+  // 4. Save to Firestore asynchronously in background
   try {
     const clipRef = doc(db, 'clips', clipId);
     setDoc(clipRef, newClip).catch((err) => {
@@ -678,7 +720,7 @@ export async function createNewClip(clipData: Omit<ClipItem, 'clipId' | 'downloa
 }
 
 /**
- * Update an existing clip (Owner or uploader Admin)
+ * Update an existing clip (Owner or uploader Admin) with auto-refresh
  */
 export async function updateClip(
   clipId: string,
@@ -696,11 +738,22 @@ export async function updateClip(
   }
 
   const now = new Date().toISOString();
+  const updatedItem = { ...(existing || {}), ...updates, clipId, updatedAt: now };
   // 1. Update locally
-  const updated = current.map((c) => (c.clipId === clipId ? { ...c, ...updates, updatedAt: now } : c));
+  const updated = current.map((c) => (c.clipId === clipId ? (updatedItem as ClipItem) : c));
   saveLocalClips(updated);
 
-  // 2. Update Firestore
+  // 2. Refresh all React listeners automatically!
+  notifyClipsSubscribers();
+
+  // 3. Save to backend server API
+  fetch('/api/clips/save', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(updatedItem),
+  }).catch(() => {});
+
+  // 4. Update Firestore
   try {
     const clipRef = doc(db, 'clips', clipId);
     await updateDoc(clipRef, { ...updates, updatedAt: now });
@@ -710,7 +763,7 @@ export async function updateClip(
 }
 
 /**
- * Delete a clip (Owner or uploader Admin)
+ * Delete a clip (Owner or uploader Admin) with auto-refresh
  */
 export async function deleteClip(
   clipId: string,
@@ -730,7 +783,17 @@ export async function deleteClip(
   const updated = current.filter((c) => c.clipId !== clipId);
   saveLocalClips(updated);
 
-  // 2. Delete from Firestore
+  // 2. Refresh all React listeners automatically!
+  notifyClipsSubscribers();
+
+  // 3. Delete from backend server API
+  fetch('/api/clips/delete', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ clipId }),
+  }).catch(() => {});
+
+  // 4. Delete from Firestore
   try {
     const clipRef = doc(db, 'clips', clipId);
     await deleteDoc(clipRef);
