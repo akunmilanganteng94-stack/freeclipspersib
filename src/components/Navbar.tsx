@@ -1,5 +1,5 @@
 import React from 'react';
-import { Search, Flame, Video, Users, Home, Shield, LogOut, Smartphone } from 'lucide-react';
+import { Search, Flame, Video, Users, Home, Shield, LogOut, Smartphone, Lock } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { SiteSettings } from '../types';
 
@@ -106,8 +106,8 @@ export const Navbar: React.FC<NavbarProps> = ({
             </button>
           )}
 
-          {/* Discreet indicator only if already logged in */}
-          {isAdmin && (
+          {/* Discreet indicator if already logged in, or quick login access button */}
+          {isAdmin ? (
             <div className="flex items-center gap-1.5 pl-2 border-l border-slate-200">
               <button
                 onClick={() => onNavigate(isOwner ? '/azryl-control/owner' : '/azryl-control/admin')}
@@ -124,6 +124,15 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <LogOut className="w-4 h-4" />
               </button>
             </div>
+          ) : (
+            <button
+              onClick={() => onNavigate('/azryl-control')}
+              className="p-2 rounded-xl text-slate-400 hover:text-blue-700 hover:bg-blue-50 transition-colors cursor-pointer"
+              title="Login Admin & Owner"
+              aria-label="Login Admin & Owner"
+            >
+              <Lock className="w-4 h-4" />
+            </button>
           )}
         </div>
       </div>

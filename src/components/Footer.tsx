@@ -1,5 +1,5 @@
 import React from 'react';
-import { Heart, ShieldCheck, Download, Sparkles } from 'lucide-react';
+import { Heart, ShieldCheck, Download, Sparkles, Lock } from 'lucide-react';
 
 interface FooterProps {
   onNavigate: (path: string) => void;
@@ -79,6 +79,15 @@ export const Footer: React.FC<FooterProps> = ({ onNavigate }) => {
                   Daftar Admin
                 </button>
               </li>
+              <li>
+                <button
+                  onClick={() => onNavigate('/azryl-control')}
+                  className="hover:text-blue-700 transition-colors cursor-pointer flex items-center gap-1.5 text-slate-500 font-semibold pt-1"
+                >
+                  <Lock className="w-3.5 h-3.5 text-blue-600" />
+                  <span>Login Admin & Owner</span>
+                </button>
+              </li>
             </ul>
           </div>
 
@@ -109,11 +118,15 @@ export const Footer: React.FC<FooterProps> = ({ onNavigate }) => {
           <p className="font-medium text-slate-500">
             FREE CLIPS PERSIB — Free Persib Clips
           </p>
-          {/* Permanent Elegant Watermark */}
-          <div className="flex items-center gap-1.5 text-slate-400 font-medium">
+          {/* Permanent Elegant Watermark with quick portal shortcut */}
+          <button
+            onClick={() => onNavigate('/azryl-control')}
+            className="flex items-center gap-1.5 text-slate-400 font-medium hover:text-blue-700 transition-colors cursor-pointer group"
+            title="Portal Login Admin & Owner"
+          >
             <span>Powered by</span>
-            <span className="font-extrabold text-blue-700 tracking-wider">AZRYL</span>
-          </div>
+            <span className="font-extrabold text-blue-700 tracking-wider group-hover:underline">AZRYL</span>
+          </button>
         </div>
       </div>
     </footer>
