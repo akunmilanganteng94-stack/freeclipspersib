@@ -99,11 +99,17 @@ export const ClipCard: React.FC<ClipCardProps> = ({ clip, rank, onNavigate, onSh
         {clip.primaryMediaType === 'video' ? (
           <div className="relative w-full h-full">
             <img
-              src={clip.photoOneUrl || clip.photoTwoUrl}
+              src={clip.photoOneUrl || clip.photoTwoUrl || 'https://i.postimg.cc/4ysQFgqx/1366b69ba442d21911f314947331b50a.jpg'}
               alt={clip.title}
               className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-103"
               loading="lazy"
               referrerPolicy="no-referrer"
+              onError={(e) => {
+                const target = e.currentTarget;
+                if (!target.src.includes('1366b69ba442d21911f314947331b50a')) {
+                  target.src = 'https://i.postimg.cc/4ysQFgqx/1366b69ba442d21911f314947331b50a.jpg';
+                }
+              }}
             />
             <div className="absolute inset-0 bg-gradient-to-t from-slate-950/70 via-transparent to-black/20" />
             <div className="absolute bottom-2.5 left-2.5 flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-blue-600 text-white text-[11px] font-bold shadow-xs">
@@ -114,11 +120,17 @@ export const ClipCard: React.FC<ClipCardProps> = ({ clip, rank, onNavigate, onSh
         ) : (
           <div className="relative w-full h-full">
             <img
-              src={clip.primaryMediaUrl}
+              src={clip.primaryMediaUrl || clip.photoOneUrl || 'https://i.postimg.cc/4ysQFgqx/1366b69ba442d21911f314947331b50a.jpg'}
               alt={clip.title}
               className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-103"
               loading="lazy"
               referrerPolicy="no-referrer"
+              onError={(e) => {
+                const target = e.currentTarget;
+                if (!target.src.includes('1366b69ba442d21911f314947331b50a')) {
+                  target.src = 'https://i.postimg.cc/4ysQFgqx/1366b69ba442d21911f314947331b50a.jpg';
+                }
+              }}
             />
             <div className="absolute inset-0 bg-gradient-to-t from-slate-950/70 via-transparent to-black/20" />
             <div className="absolute bottom-2.5 left-2.5 flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-slate-800 text-white text-[11px] font-bold shadow-xs">

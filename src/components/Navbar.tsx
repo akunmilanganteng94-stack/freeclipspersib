@@ -29,6 +29,9 @@ export const Navbar: React.FC<NavbarProps> = ({
               alt="Persib Bandung Logo"
               className="w-full h-full object-cover rounded-full bg-white"
               referrerPolicy="no-referrer"
+              onError={(e) => {
+                e.currentTarget.src = 'https://i.postimg.cc/4ysQFgqx/1366b69ba442d21911f314947331b50a.jpg';
+              }}
             />
           </div>
 
