@@ -306,23 +306,16 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
       const randomCode = Math.floor(100 + Math.random() * 900);
       const generatedSlug = `${prefix}-${randomCode}`;
 
-      setUploadProgress(30);
+      setUploadProgress(25);
       const primaryPath = `clips/${userProfile?.uid || 'owner'}/${generatedSlug}/primary_${primaryFile.name}`;
-      const primaryUrl = await uploadMediaFile(primaryFile, primaryPath, (pct) => {
-        setUploadProgress(30 + Math.floor(pct * 0.25));
-      });
-
-      setUploadProgress(60);
       const photoOnePath = `clips/${userProfile?.uid || 'owner'}/${generatedSlug}/photo1_${photoOneFile.name}`;
-      const photoOneUrl = await uploadMediaFile(photoOneFile, photoOnePath, (pct) => {
-        setUploadProgress(60 + Math.floor(pct * 0.2));
-      });
-
-      setUploadProgress(80);
       const photoTwoPath = `clips/${userProfile?.uid || 'owner'}/${generatedSlug}/photo2_${photoTwoFile.name}`;
-      const photoTwoUrl = await uploadMediaFile(photoTwoFile, photoTwoPath, (pct) => {
-        setUploadProgress(80 + Math.floor(pct * 0.2));
-      });
+
+      const [primaryUrl, photoOneUrl, photoTwoUrl] = await Promise.all([
+        uploadMediaFile(primaryFile, primaryPath, (pct) => setUploadProgress(25 + Math.floor(pct * 0.35))),
+        uploadMediaFile(photoOneFile, photoOnePath, (pct) => setUploadProgress(40 + Math.floor(pct * 0.25))),
+        uploadMediaFile(photoTwoFile, photoTwoPath, (pct) => setUploadProgress(50 + Math.floor(pct * 0.35))),
+      ]);
 
       setUploadProgress(95);
       await createNewClip({

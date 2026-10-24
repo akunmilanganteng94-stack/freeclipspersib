@@ -211,26 +211,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ clips, onNavigat
       const randomCode = Math.floor(100 + Math.random() * 900);
       const generatedSlug = `${adminPrefix}-${randomCode}`;
 
-      // Upload Primary File
+      // Upload all 3 media files simultaneously in parallel for lightning-fast publishing
       setUploadProgress(25);
       const primaryPath = `clips/${userProfile?.uid}/${generatedSlug}/primary_${primaryFile.name}`;
-      const primaryUrl = await uploadMediaFile(primaryFile, primaryPath, (pct) => {
-        setUploadProgress(25 + Math.floor(pct * 0.25));
-      });
-
-      // Upload Photo One
-      setUploadProgress(55);
       const photoOnePath = `clips/${userProfile?.uid}/${generatedSlug}/photo1_${photoOneFile.name}`;
-      const photoOneUrl = await uploadMediaFile(photoOneFile, photoOnePath, (pct) => {
-        setUploadProgress(55 + Math.floor(pct * 0.2));
-      });
-
-      // Upload Photo Two
-      setUploadProgress(75);
       const photoTwoPath = `clips/${userProfile?.uid}/${generatedSlug}/photo2_${photoTwoFile.name}`;
-      const photoTwoUrl = await uploadMediaFile(photoTwoFile, photoTwoPath, (pct) => {
-        setUploadProgress(75 + Math.floor(pct * 0.2));
-      });
+
+      const [primaryUrl, photoOneUrl, photoTwoUrl] = await Promise.all([
+        uploadMediaFile(primaryFile, primaryPath, (pct) => setUploadProgress(25 + Math.floor(pct * 0.35))),
+        uploadMediaFile(photoOneFile, photoOnePath, (pct) => setUploadProgress(40 + Math.floor(pct * 0.25))),
+        uploadMediaFile(photoTwoFile, photoTwoPath, (pct) => setUploadProgress(50 + Math.floor(pct * 0.35))),
+      ]);
 
       // Save Clip in Database
       setUploadProgress(95);

@@ -360,7 +360,7 @@ export const HomePage: React.FC<HomePageProps> = ({ clips, admins, siteSettings,
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-          {admins.slice(0, 3).map((adm) => {
+          {admins.map((adm) => {
             const adminClipsCount = clips.filter((c) => c.uploaderUid === adm.uid).length;
             return (
               <div
@@ -371,7 +371,7 @@ export const HomePage: React.FC<HomePageProps> = ({ clips, admins, siteSettings,
                 <img
                   src={adm.profileImage || 'https://i.postimg.cc/4ysQFgqx/1366b69ba442d21911f314947331b50a.jpg'}
                   alt={adm.adminName}
-                  className="w-12 h-12 rounded-full object-cover border-2 border-blue-500/30"
+                  className="w-12 h-12 rounded-full object-cover border-2 border-blue-500/30 shrink-0"
                   referrerPolicy="no-referrer"
                 />
                 <div className="min-w-0 flex-1">

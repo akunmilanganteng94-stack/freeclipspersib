@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Users, Video, MessageCircle, ExternalLink, ShieldCheck } from 'lucide-react';
 import { UserProfile, ClipItem } from '../types';
+import { INITIAL_USERS } from '../services/clipsService';
 
 interface AllAdminPageProps {
   admins: UserProfile[];
@@ -9,7 +10,15 @@ interface AllAdminPageProps {
 }
 
 export const AllAdminPage: React.FC<AllAdminPageProps> = ({ admins, clips, onNavigate }) => {
-  const activeAdmins = admins.filter((a) => a.active);
+  // Pastikan seluruh admin dan owner muncul lengkap tanpa ada yang terpotong/tersembunyi
+  const allAdmins = useMemo(() => {
+    const userMap = new Map<string, UserProfile>();
+    INITIAL_USERS.forEach((u) => userMap.set(u.uid, u));
+    if (admins && admins.length > 0) {
+      admins.forEach((u) => userMap.set(u.uid, { ...userMap.get(u.uid), ...u }));
+    }
+    return Array.from(userMap.values());
+  }, [admins]);
 
   return (
     <div className="space-y-8">
@@ -30,9 +39,9 @@ export const AllAdminPage: React.FC<AllAdminPageProps> = ({ admins, clips, onNav
         </div>
       </div>
 
-      {/* Admins Grid */}
+      {/* Admins Grid - Menampilkan Seluruh Admin */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {activeAdmins.map((admin) => {
+        {allAdmins.map((admin) => {
           const adminClips = clips.filter((c) => c.uploaderUid === admin.uid && c.published);
           const totalDownloads = adminClips.reduce((acc, c) => acc + (c.downloadCount || 0), 0);
 
