@@ -34,20 +34,9 @@ function AppContent() {
   const [siteSettings, setSiteSettings] = useState<SiteSettings>(getLocalSettings());
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
-  // Enforce no-zoom on touch devices (only swipe, scroll, tap, and press allowed)
   useEffect(() => {
     document.documentElement.classList.remove('dark');
     localStorage.removeItem('azryl_theme');
-
-    const preventZoom = (e: TouchEvent) => {
-      if (e.touches && e.touches.length > 1) {
-        e.preventDefault();
-      }
-    };
-    document.addEventListener('touchmove', preventZoom, { passive: false });
-    return () => {
-      document.removeEventListener('touchmove', preventZoom);
-    };
   }, []);
 
   // Browser navigation sync
@@ -270,8 +259,8 @@ function AppContent() {
         }}
       />
 
-      {/* Main Page Body */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+      {/* Main Page Body with bottom padding for floating navigation bar */}
+      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 pb-24 sm:pb-28">
         {renderRoute()}
       </main>
 

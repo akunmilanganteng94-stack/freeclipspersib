@@ -16,10 +16,7 @@
     color: #1e293b;
     min-height: 100vh;
     -webkit-font-smoothing: antialiased;
-    /* Prevent zooming, allow panning and clicking */
-    touch-action: manipulation;
     -webkit-text-size-adjust: 100%;
-    overscroll-behavior-y: contain;
   }
 }
 
