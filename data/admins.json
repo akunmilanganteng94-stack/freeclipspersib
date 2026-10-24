@@ -1,1 +1,44 @@
-
+[
+  {
+    "uid": "apriliansyah-owner-uid",
+    "email": "apriliansyahazril10@gmail.com",
+    "role": "owner",
+    "adminName": "Azryl (Owner)",
+    "profileImage": "https://i.postimg.cc/4ysQFgqx/1366b69ba442d21911f314947331b50a.jpg",
+    "bio": "Founder & Lead Creator of AZRYL CLIPS. Berdedikasi membagikan video dan foto clips Persib Bandung kualitas terbaik untuk seluruh Bobotoh se-alam dunya.",
+    "tiktokUrl": "https://www.tiktok.com/@azrylclips",
+    "instagramUrl": "https://www.instagram.com/azrylclips",
+    "whatsappChannelUrl": "https://whatsapp.com/channel/persib-azryl",
+    "active": true,
+    "createdAt": "2026-09-24T16:41:04.531Z",
+    "updatedAt": "2026-10-24T16:41:04.532Z"
+  },
+  {
+    "uid": "dadan-admin-uid",
+    "email": "dadan@azrylclips.com",
+    "role": "admin",
+    "adminName": "Kang Dadan Persib",
+    "profileImage": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=300&h=300&fit=crop",
+    "bio": "Photographer & Video Editor resmi komunitas Bobotoh. Mengabadikan setiap jengkal perjuangan Pangeran Biru di atas lapangan hijau.",
+    "tiktokUrl": "https://www.tiktok.com/@dadan_persib",
+    "instagramUrl": "https://www.instagram.com/dadan_persib",
+    "whatsappChannelUrl": "https://whatsapp.com/channel/dadan-persib",
+    "active": true,
+    "createdAt": "2026-10-09T16:41:04.532Z",
+    "updatedAt": "2026-10-24T16:41:04.532Z"
+  },
+  {
+    "uid": "angga-admin-uid",
+    "email": "angga@azrylclips.com",
+    "role": "admin",
+    "adminName": "Angga Maung",
+    "profileImage": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=300&h=300&fit=crop",
+    "bio": "Matchday videographer. Spesialis video slow-motion selebrasi gol dan chant Bobotoh tribun timur.",
+    "tiktokUrl": "https://www.tiktok.com/@anggamaung33",
+    "instagramUrl": "https://www.instagram.com/anggamaung",
+    "whatsappChannelUrl": "",
+    "active": true,
+    "createdAt": "2026-10-14T16:41:04.532Z",
+    "updatedAt": "2026-10-24T16:41:04.532Z"
+  }
+]
