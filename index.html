@@ -2,7 +2,7 @@
 <html lang="id">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <title>FREE CLIPS PERSIB</title>
     <meta name="description" content="Platform berbagi dan download clips Persib Bandung gratis untuk Bobotoh dengan pemutar video, galeri foto, dan unduhan berkualitas tinggi." />
     <meta property="og:title" content="FREE CLIPS PERSIB" />
@@ -20,6 +20,46 @@
   </head>
   <body class="bg-[#f2f6fc] text-slate-800 antialiased selection:bg-blue-600 selection:text-white min-h-screen">
     <div id="root"></div>
+    <!-- Script untuk memblokir pinch-zoom & double tap zoom tanpa memblokir scroll, pull-to-refresh, klik, maupun tekan -->
+    <script>
+      (function() {
+        // Blokir gesture zoom di iOS Safari (pinch zoom)
+        document.addEventListener('gesturestart', function(e) {
+          e.preventDefault();
+        }, { passive: false });
+        document.addEventListener('gesturechange', function(e) {
+          e.preventDefault();
+        }, { passive: false });
+        document.addEventListener('gestureend', function(e) {
+          e.preventDefault();
+        }, { passive: false });
+
+        // Blokir multi-touch pinch zoom (hanya jika jari > 1)
+        // Jika hanya 1 jari, scroll normal dan pull-to-refresh tetap berjalan mulus
+        document.addEventListener('touchmove', function(e) {
+          if (e.touches && e.touches.length > 1) {
+            e.preventDefault();
+          }
+        }, { passive: false });
+
+        // Blokir double-tap zoom tanpa mengganggu ketukan/pencetan tombol biasa
+        var lastTouchEnd = 0;
+        document.addEventListener('touchend', function(e) {
+          var now = Date.now();
+          if (now - lastTouchEnd <= 300) {
+            var target = e.target;
+            var tag = target && target.tagName ? target.tagName.toUpperCase() : '';
+            if (tag !== 'INPUT' && tag !== 'TEXTAREA' && tag !== 'SELECT') {
+              e.preventDefault();
+              if (target && typeof target.click === 'function') {
+                target.click();
+              }
+            }
+          }
+          lastTouchEnd = now;
+        }, { passive: false });
+      })();
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

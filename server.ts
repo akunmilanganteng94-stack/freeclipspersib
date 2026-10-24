@@ -4,6 +4,8 @@ import { fileURLToPath } from 'url';
 import JSZip from 'jszip';
 import dotenv from 'dotenv';
 
+import fs from 'fs';
+
 dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
@@ -12,7 +14,47 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 
-app.use(express.json());
+// High limits for seamless media uploads (photos & video clips)
+app.use(express.json({ limit: '150mb' }));
+app.use(express.urlencoded({ extended: true, limit: '150mb' }));
+
+// Ensure public/uploads directory exists and serve it statically
+const uploadsDir = path.join(__dirname, 'public', 'uploads');
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+}
+app.use('/uploads', express.static(uploadsDir));
+
+// Media Upload API: Saves uploaded clips and avatars permanently to public/uploads
+app.post('/api/upload-media', async (req: Request, res: Response) => {
+  try {
+    const { filename, base64Data, contentType } = req.body;
+    if (!base64Data || !filename) {
+      return res.status(400).json({ error: 'File data and filename are required' });
+    }
+
+    const cleanBase64 = base64Data.replace(/^data:[^;]+;base64,/, '');
+    const buffer = Buffer.from(cleanBase64, 'base64');
+
+    const ext = path.extname(filename) || (contentType?.includes('video') ? '.mp4' : '.jpg');
+    const safeBase = filename.replace(/[^a-zA-Z0-9_\-]/g, '_').replace(/\.[^/.]+$/, '');
+    const uniqueFilename = `${Date.now()}_${safeBase}${ext}`;
+    const filePath = path.join(uploadsDir, uniqueFilename);
+
+    await fs.promises.writeFile(filePath, buffer);
+    const publicUrl = `/uploads/${uniqueFilename}`;
+
+    return res.json({
+      success: true,
+      url: publicUrl,
+      filename: uniqueFilename,
+      size: buffer.length,
+    });
+  } catch (err: any) {
+    console.error('Server upload error:', err);
+    return res.status(500).json({ error: err.message || 'Failed to save media file' });
+  }
+});
 
 // Idempotency cache for download counts (prevents double-counting within 30 seconds)
 const recentDownloads = new Map<string, number>();
@@ -65,11 +107,26 @@ app.get('/api/download', async (req: Request, res: Response) => {
     // Sanitize filename
     const safeFilename = filename.replace(/[^a-zA-Z0-9_\-\.]/g, '_');
 
-    // Handle relative local asset paths
+    // Handle relative local asset and uploads paths
     if (fileUrl.startsWith('/src/assets/')) {
       const localFilePath = path.join(__dirname, fileUrl);
       res.setHeader('Content-Disposition', `attachment; filename="${safeFilename}"`);
       return res.sendFile(localFilePath);
+    }
+    if (fileUrl.startsWith('/uploads/')) {
+      const localFilePath = path.join(uploadsDir, fileUrl.replace(/^\/uploads\//, ''));
+      res.setHeader('Content-Disposition', `attachment; filename="${safeFilename}"`);
+      return res.sendFile(localFilePath);
+    }
+    if (fileUrl.startsWith('data:')) {
+      const matches = fileUrl.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+      if (matches && matches.length === 3) {
+        const contentType = matches[1];
+        const buffer = Buffer.from(matches[2], 'base64');
+        res.setHeader('Content-Type', contentType);
+        res.setHeader('Content-Disposition', `attachment; filename="${safeFilename}"`);
+        return res.send(buffer);
+      }
     }
 
     // Remote URL (Firebase Storage or CDN)
@@ -113,9 +170,14 @@ app.post('/api/download-zip', async (req: Request, res: Response) => {
         try {
           let buffer: Buffer;
           if (item.url.startsWith('/src/assets/')) {
-            const fs = await import('fs/promises');
             const localPath = path.join(__dirname, item.url);
-            buffer = await fs.readFile(localPath);
+            buffer = await fs.promises.readFile(localPath);
+          } else if (item.url.startsWith('/uploads/')) {
+            const localPath = path.join(uploadsDir, item.url.replace(/^\/uploads\//, ''));
+            buffer = await fs.promises.readFile(localPath);
+          } else if (item.url.startsWith('data:')) {
+            const cleanBase64 = item.url.replace(/^data:[^;]+;base64,/, '');
+            buffer = Buffer.from(cleanBase64, 'base64');
           } else {
             const resp = await fetch(item.url);
             if (resp.ok) {
