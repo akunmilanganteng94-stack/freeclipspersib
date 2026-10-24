@@ -219,43 +219,307 @@ app.post('/api/download-zip', async (req: Request, res: Response) => {
   }
 });
 
+// Ensure data directory exists for persistent admins
+const dataDir = path.join(__dirname, 'data');
+if (!fs.existsSync(dataDir)) {
+  fs.mkdirSync(dataDir, { recursive: true });
+}
+const adminsFile = path.join(dataDir, 'admins.json');
+const deletedAdminsFile = path.join(dataDir, 'deleted_admins.json');
+
+if (!fs.existsSync(deletedAdminsFile)) {
+  fs.writeFileSync(deletedAdminsFile, JSON.stringify([], null, 2), 'utf-8');
+}
+
+const DEFAULT_SERVER_ADMINS = [
+  {
+    uid: 'apriliansyah-owner-uid',
+    email: 'apriliansyahazril10@gmail.com',
+    role: 'owner',
+    adminName: 'Azryl (Owner)',
+    profileImage: 'https://i.postimg.cc/4ysQFgqx/1366b69ba442d21911f314947331b50a.jpg',
+    bio: 'Founder & Lead Creator of AZRYL CLIPS. Berdedikasi membagikan video dan foto clips Persib Bandung kualitas terbaik untuk seluruh Bobotoh se-alam dunya.',
+    tiktokUrl: 'https://www.tiktok.com/@azrylclips',
+    instagramUrl: 'https://www.instagram.com/azrylclips',
+    whatsappChannelUrl: 'https://whatsapp.com/channel/persib-azryl',
+    active: true,
+    createdAt: new Date(Date.now() - 3600000 * 24 * 30).toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+  {
+    uid: 'dadan-admin-uid',
+    email: 'dadan@azrylclips.com',
+    role: 'admin',
+    adminName: 'Kang Dadan Persib',
+    profileImage: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=300&h=300&fit=crop',
+    bio: 'Photographer & Video Editor resmi komunitas Bobotoh. Mengabadikan setiap jengkal perjuangan Pangeran Biru di atas lapangan hijau.',
+    tiktokUrl: 'https://www.tiktok.com/@dadan_persib',
+    instagramUrl: 'https://www.instagram.com/dadan_persib',
+    whatsappChannelUrl: 'https://whatsapp.com/channel/dadan-persib',
+    active: true,
+    createdAt: new Date(Date.now() - 3600000 * 24 * 15).toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+  {
+    uid: 'angga-admin-uid',
+    email: 'angga@azrylclips.com',
+    role: 'admin',
+    adminName: 'Angga Maung',
+    profileImage: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=300&h=300&fit=crop',
+    bio: 'Matchday videographer. Spesialis video slow-motion selebrasi gol dan chant Bobotoh tribun timur.',
+    tiktokUrl: 'https://www.tiktok.com/@anggamaung33',
+    instagramUrl: 'https://www.instagram.com/anggamaung',
+    whatsappChannelUrl: '',
+    active: true,
+    createdAt: new Date(Date.now() - 3600000 * 24 * 10).toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+];
+
+if (!fs.existsSync(adminsFile)) {
+  fs.writeFileSync(adminsFile, JSON.stringify(DEFAULT_SERVER_ADMINS, null, 2), 'utf-8');
+} else {
+  try {
+    const raw = fs.readFileSync(adminsFile, 'utf-8');
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed) || parsed.length === 0) {
+      fs.writeFileSync(adminsFile, JSON.stringify(DEFAULT_SERVER_ADMINS, null, 2), 'utf-8');
+    }
+  } catch {
+    fs.writeFileSync(adminsFile, JSON.stringify(DEFAULT_SERVER_ADMINS, null, 2), 'utf-8');
+  }
+}
+
+function getDeletedAdminUids(): string[] {
+  try {
+    if (fs.existsSync(deletedAdminsFile)) {
+      const content = fs.readFileSync(deletedAdminsFile, 'utf-8');
+      const parsed = JSON.parse(content);
+      if (Array.isArray(parsed)) return parsed;
+    }
+  } catch (err) {
+    console.error('Error reading deleted_admins.json:', err);
+  }
+  return [];
+}
+
+function saveDeletedAdminUids(uids: string[]) {
+  try {
+    fs.writeFileSync(deletedAdminsFile, JSON.stringify(uids, null, 2), 'utf-8');
+  } catch (err) {
+    console.error('Error writing deleted_admins.json:', err);
+  }
+}
+
+function getStoredAdmins(): any[] {
+  try {
+    if (fs.existsSync(adminsFile)) {
+      const content = fs.readFileSync(adminsFile, 'utf-8');
+      const parsed = JSON.parse(content);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed;
+      }
+    }
+  } catch (err) {
+    console.error('Error reading admins.json:', err);
+  }
+  return DEFAULT_SERVER_ADMINS;
+}
+
+function saveStoredAdmins(admins: any[]) {
+  try {
+    fs.writeFileSync(adminsFile, JSON.stringify(admins, null, 2), 'utf-8');
+  } catch (err) {
+    console.error('Error writing admins.json:', err);
+  }
+}
+
 // 4. Create Admin Account without overriding Owner's frontend Firebase Auth session
 app.post('/api/admin/create-admin', async (req: Request, res: Response) => {
   try {
-    const { email, password, adminName, bio, tiktokUrl, instagramUrl, whatsappChannelUrl } = req.body;
+    const { email, password, adminName, bio, profileImage, tiktokUrl, instagramUrl, whatsappChannelUrl } = req.body;
     if (!email || !password || !adminName) {
       return res.status(400).json({ error: 'Email, password, and adminName are required' });
     }
 
-    const firebaseApiKey = "AIzaSyD2awU2TG21qC44SLIJl0j-6FotR3giH4";
-    // Call Firebase Auth REST API signUp
-    const signUpUrl = `https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${firebaseApiKey}`;
-    const authResp = await fetch(signUpUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        email,
-        password,
-        returnSecureToken: true,
-      }),
-    });
+    const cleanEmail = String(email).trim().toLowerCase();
+    let uid = `admin_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
 
-    const authData = await authResp.json();
-    if (!authResp.ok) {
-      return res.status(400).json({ error: authData.error?.message || 'Failed to create user in Firebase Auth' });
+    // Try creating via Firebase Auth REST API if enabled
+    try {
+      const firebaseApiKey = "AIzaSyD2awU2TG21qC44SLIJl0j-6FotR3giH4";
+      const signUpUrl = `https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${firebaseApiKey}`;
+      const authResp = await fetch(signUpUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: cleanEmail,
+          password,
+          returnSecureToken: true,
+        }),
+      });
+
+      const authData = await authResp.json();
+      if (authResp.ok && authData?.localId) {
+        uid = authData.localId;
+      }
+    } catch (fbErr) {
+      console.warn('Firebase Auth REST signup notice (using local storage fallback):', fbErr);
     }
 
-    const uid = authData.localId;
+    const defaultImg = 'https://i.postimg.cc/4ysQFgqx/1366b69ba442d21911f314947331b50a.jpg';
+    const newAdmin = {
+      uid,
+      email: cleanEmail,
+      password: String(password),
+      role: 'admin',
+      adminName: String(adminName).trim(),
+      profileImage: profileImage?.trim() || defaultImg,
+      bio: bio?.trim() || '',
+      tiktokUrl: tiktokUrl?.trim() || '',
+      instagramUrl: instagramUrl?.trim() || '',
+      whatsappChannelUrl: whatsappChannelUrl?.trim() || '',
+      active: true,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    // Remove from deleted list if present
+    const deleted = getDeletedAdminUids().filter((id) => id !== uid && id !== cleanEmail);
+    saveDeletedAdminUids(deleted);
+
+    // Save in persistent admins file
+    const stored = getStoredAdmins();
+    const existingIndex = stored.findIndex((a) => a.uid === uid || a.email.toLowerCase() === cleanEmail);
+    if (existingIndex >= 0) {
+      stored[existingIndex] = { ...stored[existingIndex], ...newAdmin };
+    } else {
+      stored.push(newAdmin);
+    }
+    saveStoredAdmins(stored);
+
+    const safeUser = { ...newAdmin };
+    delete (safeUser as any).password;
+
     return res.json({
       success: true,
       uid,
-      email,
-      adminName,
-      message: 'Admin account created successfully',
+      user: safeUser,
+      message: `Akun admin ${adminName} berhasil dibuat!`,
     });
   } catch (err: any) {
     console.error('Error creating admin:', err);
     return res.status(500).json({ error: err.message || 'Internal server error' });
+  }
+});
+
+// 5. List Custom Server Admins (excluding permanently deleted admins)
+app.get('/api/admin/list-admins', (_req: Request, res: Response) => {
+  try {
+    const deleted = new Set(getDeletedAdminUids());
+    const stored = getStoredAdmins();
+    const safeAdmins = stored
+      .filter((a) => !deleted.has(a.uid))
+      .map((a) => {
+        const copy = { ...a };
+        delete copy.password;
+        return copy;
+      });
+    return res.json(safeAdmins);
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// 5b. List Deleted Admin UIDs
+app.get('/api/admin/deleted-admins', (_req: Request, res: Response) => {
+  try {
+    const deleted = getDeletedAdminUids();
+    return res.json(deleted);
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// 6. Delete Admin from Server (persist to deleted_admins.json and remove from admins.json)
+app.post('/api/admin/delete-admin', (req: Request, res: Response) => {
+  try {
+    const { uid } = req.body;
+    if (!uid) return res.status(400).json({ error: 'UID is required' });
+    
+    // Add to deleted admins list
+    const deleted = getDeletedAdminUids();
+    if (!deleted.includes(uid)) {
+      deleted.push(uid);
+      saveDeletedAdminUids(deleted);
+    }
+
+    // Remove from stored admins
+    const stored = getStoredAdmins();
+    const filtered = stored.filter((a) => a.uid !== uid);
+    saveStoredAdmins(filtered);
+    
+    return res.json({ success: true, deletedUid: uid });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// 7. Update Admin Profile on Server (Upsert support for both initial and newly created admins)
+app.post('/api/admin/update-admin', (req: Request, res: Response) => {
+  try {
+    const { uid, updates } = req.body;
+    if (!uid) return res.status(400).json({ error: 'UID is required' });
+    
+    // Unmark from deleted if it was somehow marked
+    const deleted = getDeletedAdminUids().filter((id) => id !== uid);
+    saveDeletedAdminUids(deleted);
+
+    const stored = getStoredAdmins();
+    const idx = stored.findIndex((a) => a.uid === uid);
+    let updatedItem: any;
+
+    if (idx >= 0) {
+      updatedItem = { ...stored[idx], ...updates, updatedAt: new Date().toISOString() };
+      stored[idx] = updatedItem;
+    } else {
+      updatedItem = { uid, ...updates, updatedAt: new Date().toISOString() };
+      stored.push(updatedItem);
+    }
+    
+    saveStoredAdmins(stored);
+    const safe = { ...updatedItem };
+    delete safe.password;
+    return res.json({ success: true, user: safe });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// 8. Verify Admin Login
+app.post('/api/admin/verify-login', (req: Request, res: Response) => {
+  try {
+    const { email, password } = req.body;
+    if (!email || !password) {
+      return res.status(400).json({ error: 'Email and password are required' });
+    }
+    const cleanEmail = String(email).trim().toLowerCase();
+    const deleted = new Set(getDeletedAdminUids());
+    const stored = getStoredAdmins();
+    const found = stored.find((a) => !deleted.has(a.uid) && a.email.toLowerCase() === cleanEmail && a.password === String(password));
+
+    if (found) {
+      if (!found.active) {
+        return res.status(403).json({ error: 'Akun admin ini dinonaktifkan oleh Owner.' });
+      }
+      const safe = { ...found };
+      delete safe.password;
+      return res.json({ success: true, user: safe });
+    }
+
+    return res.status(401).json({ error: 'Email atau password salah.' });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
   }
 });
 
