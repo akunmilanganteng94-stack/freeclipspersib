@@ -489,6 +489,22 @@ export async function saveUserProfile(user: UserProfile): Promise<void> {
 }
 
 /**
+ * Delete Admin user profile (Owner action)
+ */
+export async function deleteUserProfile(uid: string): Promise<void> {
+  const current = getLocalUsers();
+  const updated = current.filter((u) => u.uid !== uid);
+  saveLocalUsers(updated);
+
+  try {
+    const userRef = doc(db, 'users', uid);
+    await deleteDoc(userRef);
+  } catch (err) {
+    handleFirestoreError(err, OperationType.DELETE, `users/${uid}`);
+  }
+}
+
+/**
  * Save Site Settings (Owner action)
  */
 export async function updateSiteSettings(settings: Partial<SiteSettings>): Promise<void> {
