@@ -45,9 +45,9 @@ export const HomePage: React.FC<HomePageProps> = ({ clips, admins, siteSettings,
   }, [clips]);
 
   return (
-    <div className="space-y-12">
-      {/* A. Hero Section */}
-      <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-blue-900 via-blue-800 to-indigo-950 text-white shadow-xl p-6 sm:p-10 lg:p-14 border border-blue-700/40">
+    <div className="space-y-8 sm:space-y-10">
+      {/* A. Hero Section (Dibuat lebih ringkas & proporsional agar hemat tempat) */}
+      <section className="relative overflow-hidden rounded-2xl sm:rounded-3xl bg-gradient-to-br from-blue-900 via-blue-800 to-indigo-950 text-white shadow-lg p-5 sm:p-7 lg:p-8 border border-blue-700/40">
         {/* Subtle stadium backdrop image */}
         <div className="absolute inset-0 opacity-20 pointer-events-none mix-blend-overlay">
           <img
@@ -56,36 +56,36 @@ export const HomePage: React.FC<HomePageProps> = ({ clips, admins, siteSettings,
             className="w-full h-full object-cover"
           />
         </div>
-        <div className="absolute -right-20 -top-20 w-80 h-80 bg-blue-500/20 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute -left-20 -bottom-20 w-80 h-80 bg-sky-400/15 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute -right-20 -top-20 w-72 h-72 bg-blue-500/20 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute -left-20 -bottom-20 w-72 h-72 bg-sky-400/15 rounded-full blur-3xl pointer-events-none" />
 
-        <div className="relative z-10 max-w-3xl space-y-5">
-          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/10 backdrop-blur-md border border-white/20 text-blue-200 text-xs font-bold tracking-wide uppercase">
+        <div className="relative z-10 max-w-2xl space-y-3.5">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 backdrop-blur-md border border-white/20 text-blue-200 text-[11px] sm:text-xs font-bold tracking-wide uppercase">
             <Sparkles className="w-3.5 h-3.5 text-amber-400" />
             <span>Platform Resmi Bebas Unduh Bobotoh</span>
           </div>
 
-          <h1 className="text-3xl sm:text-5xl lg:text-6xl font-black tracking-tight leading-[1.1] text-white">
+          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-black tracking-tight leading-tight text-white">
             FREE PERSIB <span className="text-sky-300">CLIPS</span>
           </h1>
 
-          <p className="text-sm sm:text-base lg:text-lg text-blue-100 max-w-2xl leading-relaxed font-normal">
+          <p className="text-xs sm:text-sm text-blue-100 max-w-xl leading-relaxed font-normal">
             Kumpulan clips Persib Bandung gratis untuk semua Bobotoh. Cari, tonton, download 3 media
             sekaligus, dan bagikan momen magis Pangeran Biru!
           </p>
 
           {/* CTA Buttons */}
-          <div className="flex flex-wrap items-center gap-3 pt-2">
+          <div className="flex flex-wrap items-center gap-2.5 pt-1">
             <button
               onClick={() => onNavigate('/clips')}
-              className="px-6 py-3 rounded-2xl bg-white text-blue-900 font-extrabold text-sm hover:bg-blue-50 transition-all shadow-lg active:scale-95 cursor-pointer flex items-center gap-2"
+              className="px-4 sm:px-5 py-2.5 rounded-xl bg-white text-blue-900 font-extrabold text-xs sm:text-sm hover:bg-blue-50 transition-all shadow-md active:scale-95 cursor-pointer flex items-center gap-2"
             >
               <Video className="w-4 h-4 text-blue-700" />
               <span>Jelajahi Clips</span>
             </button>
             <button
               onClick={() => onNavigate('/trending')}
-              className="px-6 py-3 rounded-2xl bg-blue-600/60 text-white font-extrabold text-sm hover:bg-blue-600 transition-all border border-blue-400/40 backdrop-blur-md active:scale-95 cursor-pointer flex items-center gap-2"
+              className="px-4 sm:px-5 py-2.5 rounded-xl bg-blue-600/60 text-white font-extrabold text-xs sm:text-sm hover:bg-blue-600 transition-all border border-blue-400/40 backdrop-blur-md active:scale-95 cursor-pointer flex items-center gap-2"
             >
               <Flame className="w-4 h-4 text-amber-400 fill-current" />
               <span>Clips Trending</span>
@@ -96,7 +96,7 @@ export const HomePage: React.FC<HomePageProps> = ({ clips, admins, siteSettings,
                 href={siteSettings.apkDownloadUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="px-6 py-3 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-500 text-white font-extrabold text-sm hover:from-emerald-500 hover:to-teal-400 transition-all shadow-lg active:scale-95 cursor-pointer flex items-center gap-2 border border-emerald-400/30"
+                className="px-4 sm:px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-500 text-white font-extrabold text-xs sm:text-sm hover:from-emerald-500 hover:to-teal-400 transition-all shadow-md active:scale-95 cursor-pointer flex items-center gap-2 border border-emerald-400/30"
                 title={`Download Versi APK Android (${siteSettings.apkVersionName || 'Official'})`}
               >
                 <Smartphone className="w-4 h-4 text-emerald-100" />
@@ -106,24 +106,24 @@ export const HomePage: React.FC<HomePageProps> = ({ clips, admins, siteSettings,
           </div>
 
           {/* Quick Bobotoh KPI Bar */}
-          <div className="grid grid-cols-3 gap-4 pt-6 mt-6 border-t border-white/15 max-w-lg">
+          <div className="grid grid-cols-3 gap-3 pt-3.5 mt-3.5 border-t border-white/15 max-w-md">
             <div>
-              <p className="text-2xl sm:text-3xl font-black text-white tabular-nums">
+              <p className="text-xl sm:text-2xl font-black text-white tabular-nums">
                 {totalDownloads.toLocaleString()}
               </p>
-              <p className="text-[11px] text-blue-200 font-medium">Total Download</p>
+              <p className="text-[10px] sm:text-[11px] text-blue-200 font-medium">Total Download</p>
             </div>
             <div>
-              <p className="text-2xl sm:text-3xl font-black text-white tabular-nums">
+              <p className="text-xl sm:text-2xl font-black text-white tabular-nums">
                 {clips.length}
               </p>
-              <p className="text-[11px] text-blue-200 font-medium">Total Clips HD</p>
+              <p className="text-[10px] sm:text-[11px] text-blue-200 font-medium">Total Clips HD</p>
             </div>
             <div>
-              <p className="text-2xl sm:text-3xl font-black text-white">
+              <p className="text-xl sm:text-2xl font-black text-white">
                 100%
               </p>
-              <p className="text-[11px] text-blue-200 font-medium">Gratis Tanpa Login</p>
+              <p className="text-[10px] sm:text-[11px] text-blue-200 font-medium">Gratis Tanpa Login</p>
             </div>
           </div>
         </div>

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Lock, Mail, ShieldAlert, ArrowRight, ShieldCheck, KeyRound } from 'lucide-react';
+import { Lock, Mail, ShieldAlert, ArrowRight } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 interface LoginPageProps {
@@ -8,7 +8,7 @@ interface LoginPageProps {
 }
 
 export const LoginPage: React.FC<LoginPageProps> = ({ onNavigate, onShowToast }) => {
-  const { login, role, simulateLoginAs } = useAuth();
+  const { login } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -40,16 +40,6 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onNavigate, onShowToast })
       }
     } else {
       setErrorMsg(res.error || 'Autentikasi gagal.');
-    }
-  };
-
-  const handleQuickDemo = (demoRole: 'owner' | 'admin') => {
-    simulateLoginAs(demoRole);
-    onShowToast(`Masuk sebagai ${demoRole.toUpperCase()}`, 'success');
-    if (demoRole === 'owner') {
-      onNavigate('/azryl-control/owner');
-    } else {
-      onNavigate('/azryl-control/admin');
     }
   };
 
@@ -128,29 +118,10 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onNavigate, onShowToast })
           </button>
         </form>
 
-        {/* Fast Evaluation Switcher */}
-        <div className="pt-4 border-t border-slate-100 space-y-2">
-          <div className="flex items-center gap-1.5 text-[11px] font-bold text-slate-400 uppercase tracking-wider justify-center">
-            <KeyRound className="w-3.5 h-3.5 text-blue-600" />
-            <span>Akses Cepat Pengujian Fitur</span>
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              onClick={() => handleQuickDemo('owner')}
-              className="neu-button-secondary py-2 px-3 rounded-xl text-xs font-bold text-blue-800 flex items-center justify-center gap-1 cursor-pointer"
-            >
-              <ShieldCheck className="w-3.5 h-3.5 text-blue-600" />
-              <span>Masuk sbg Owner</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => handleQuickDemo('admin')}
-              className="neu-button-secondary py-2 px-3 rounded-xl text-xs font-bold text-slate-700 flex items-center justify-center gap-1 cursor-pointer"
-            >
-              <span>Masuk sbg Admin</span>
-            </button>
-          </div>
+        <div className="pt-2 border-t border-slate-100 text-center">
+          <p className="text-[11px] text-slate-400">
+            Akun Admin &amp; Owner terverifikasi oleh sistem FREE CLIPS PERSIB.
+          </p>
         </div>
 
         <p className="text-[11px] text-center text-slate-400">
