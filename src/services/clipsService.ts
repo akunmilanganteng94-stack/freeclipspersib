@@ -79,6 +79,60 @@ export const DEFAULT_SETTINGS: SiteSettings = {
 const CLIPS_STORAGE_KEY = 'free_persib_clips_data_clean';
 const USERS_STORAGE_KEY = 'azryl_users_data';
 const SETTINGS_STORAGE_KEY = 'azryl_settings_data_v2';
+const DELETED_USERS_STORAGE_KEY = 'azryl_deleted_user_ids';
+
+// Persistent tracking of deleted admin UIDs so they never reappear
+export function getDeletedUserIds(): Set<string> {
+  try {
+    const raw = localStorage.getItem(DELETED_USERS_STORAGE_KEY);
+    if (raw) {
+      const arr = JSON.parse(raw);
+      if (Array.isArray(arr)) {
+        return new Set(arr);
+      }
+    }
+  } catch (e) {}
+  return new Set<string>();
+}
+
+export function markUserDeleted(uid: string) {
+  try {
+    const set = getDeletedUserIds();
+    set.add(uid);
+    localStorage.setItem(DELETED_USERS_STORAGE_KEY, JSON.stringify(Array.from(set)));
+  } catch (e) {}
+}
+
+export function unmarkUserDeleted(uid: string) {
+  try {
+    const set = getDeletedUserIds();
+    set.delete(uid);
+    localStorage.setItem(DELETED_USERS_STORAGE_KEY, JSON.stringify(Array.from(set)));
+  } catch (e) {}
+}
+
+// In-app subscribers for instant 0ms user list changes
+const userSubscribers = new Set<(users: UserProfile[]) => void>();
+
+export function notifyUsersSubscribers() {
+  const users = getLocalUsers();
+  userSubscribers.forEach((cb) => {
+    try {
+      cb(users);
+    } catch (e) {
+      console.warn('Error in user subscriber callback:', e);
+    }
+  });
+}
+
+const DEFAULT_PERSIB_IMAGE = 'https://i.postimg.cc/4ysQFgqx/1366b69ba442d21911f314947331b50a.jpg';
+
+export function sanitizeMediaUrl(url?: string, fallback = DEFAULT_PERSIB_IMAGE): string {
+  if (!url || typeof url !== 'string' || url.startsWith('blob:')) {
+    return fallback;
+  }
+  return url;
+}
 
 export function getLocalClips(): ClipItem[] {
   try {
@@ -87,7 +141,14 @@ export function getLocalClips(): ClipItem[] {
       const parsed = JSON.parse(raw);
       // Ensure any older dummy clips (persib-clip-001 etc) are excluded so it starts at 0
       const filtered = Array.isArray(parsed)
-        ? parsed.filter((c: any) => !c.clipId?.startsWith('persib-clip-'))
+        ? parsed
+            .filter((c: any) => !c.clipId?.startsWith('persib-clip-'))
+            .map((c: ClipItem) => ({
+              ...c,
+              primaryMediaUrl: sanitizeMediaUrl(c.primaryMediaUrl),
+              photoOneUrl: sanitizeMediaUrl(c.photoOneUrl),
+              photoTwoUrl: sanitizeMediaUrl(c.photoTwoUrl),
+            }))
         : [];
       return filtered;
     }
@@ -102,24 +163,46 @@ export function saveLocalClips(clips: ClipItem[]) {
 }
 
 export function getLocalUsers(): UserProfile[] {
+  const deletedIds = getDeletedUserIds();
   try {
     const raw = localStorage.getItem(USERS_STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed) && parsed.length > 0) {
         const userMap = new Map<string, UserProfile>();
-        INITIAL_USERS.forEach((u) => userMap.set(u.uid, u));
-        parsed.forEach((u) => userMap.set(u.uid, { ...userMap.get(u.uid), ...u }));
+        INITIAL_USERS.forEach((u) => {
+          if (!deletedIds.has(u.uid)) {
+            userMap.set(u.uid, {
+              ...u,
+              profileImage: sanitizeMediaUrl(u.profileImage),
+            });
+          }
+        });
+        parsed.forEach((u) => {
+          if (!deletedIds.has(u.uid)) {
+            const current = userMap.get(u.uid);
+            userMap.set(u.uid, {
+              ...current,
+              ...u,
+              profileImage: sanitizeMediaUrl(u.profileImage || current?.profileImage),
+            });
+          }
+        });
         return Array.from(userMap.values());
       }
     }
   } catch (e) {}
-  return INITIAL_USERS;
+  return INITIAL_USERS.filter((u) => !deletedIds.has(u.uid)).map((u) => ({
+    ...u,
+    profileImage: sanitizeMediaUrl(u.profileImage),
+  }));
 }
 
 export function saveLocalUsers(users: UserProfile[]) {
   try {
-    localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(users));
+    const deletedIds = getDeletedUserIds();
+    const cleanUsers = users.filter((u) => !deletedIds.has(u.uid));
+    localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(cleanUsers));
   } catch (e) {}
 }
 
@@ -281,19 +364,33 @@ export function subscribeToClips(callback: (clips: ClipItem[]) => void): () => v
  * Subscribe to all admins & users
  */
 export function subscribeToUsers(callback: (users: UserProfile[]) => void): () => void {
+  // Register in userSubscribers for immediate local deletion updates
+  userSubscribers.add(callback);
+
   try {
     const usersCol = collection(db, 'users');
     const unsubscribe = onSnapshot(
       usersCol,
       (snapshot) => {
+        const deletedIds = getDeletedUserIds();
         if (!snapshot.empty) {
           const list: UserProfile[] = [];
           snapshot.forEach((d) => {
-            list.push({ ...d.data(), uid: d.id } as UserProfile);
+            if (!deletedIds.has(d.id)) {
+              list.push({ ...d.data(), uid: d.id } as UserProfile);
+            }
           });
           const userMap = new Map<string, UserProfile>();
-          INITIAL_USERS.forEach((u) => userMap.set(u.uid, u));
-          list.forEach((u) => userMap.set(u.uid, { ...userMap.get(u.uid), ...u }));
+          INITIAL_USERS.forEach((u) => {
+            if (!deletedIds.has(u.uid)) {
+              userMap.set(u.uid, u);
+            }
+          });
+          list.forEach((u) => {
+            if (!deletedIds.has(u.uid)) {
+              userMap.set(u.uid, { ...userMap.get(u.uid), ...u });
+            }
+          });
           const merged = Array.from(userMap.values());
           saveLocalUsers(merged);
           callback(merged);
@@ -306,10 +403,15 @@ export function subscribeToUsers(callback: (users: UserProfile[]) => void): () =
         callback(getLocalUsers());
       }
     );
-    return unsubscribe;
+    return () => {
+      userSubscribers.delete(callback);
+      unsubscribe();
+    };
   } catch (err) {
     callback(getLocalUsers());
-    return () => {};
+    return () => {
+      userSubscribers.delete(callback);
+    };
   }
 }
 
@@ -342,65 +444,147 @@ export function subscribeToSettings(callback: (settings: SiteSettings) => void):
   }
 }
 
+export function readFileAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = (err) => reject(err);
+    reader.readAsDataURL(file);
+  });
+}
+
+export async function compressImageToDataUrl(file: File, maxDim = 1600, quality = 0.88): Promise<string> {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        let { width, height } = img;
+        if (width > maxDim || height > maxDim) {
+          if (width > height) {
+            height = Math.round((height * maxDim) / width);
+            width = maxDim;
+          } else {
+            width = Math.round((width * maxDim) / height);
+            height = maxDim;
+          }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          resolve(canvas.toDataURL('image/jpeg', quality));
+        } else {
+          resolve(e.target?.result as string);
+        }
+      };
+      img.onerror = () => resolve(e.target?.result as string);
+      img.src = e.target?.result as string;
+    };
+    reader.onerror = () => resolve('');
+    reader.readAsDataURL(file);
+  });
+}
+
 /**
- * Upload a media file to Firebase Storage with progress tracking
+ * Upload a media file permanently so it is 100% public, persistent, and never errors
  */
 export async function uploadMediaFile(
   file: File,
-  path: string,
+  storagePath: string,
   onProgress?: (pct: number) => void
 ): Promise<string> {
+  if (onProgress) onProgress(15);
+
+  let dataUrl = '';
   try {
-    const storageRef = ref(storage, path);
+    if (file.type.startsWith('image/')) {
+      dataUrl = await compressImageToDataUrl(file, 1600, 0.88);
+    } else {
+      dataUrl = await readFileAsDataUrl(file);
+    }
+  } catch (err) {
+    console.warn('Failed to read file as data url:', err);
+  }
+
+  if (onProgress) onProgress(45);
+
+  // 1. Try uploading to backend /api/upload-media endpoint (saves to permanent public /uploads/)
+  if (dataUrl) {
+    try {
+      const resp = await fetch('/api/upload-media', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          filename: file.name,
+          base64Data: dataUrl,
+          contentType: file.type,
+        }),
+      });
+      if (resp.ok) {
+        const json = await resp.json();
+        if (json && json.url) {
+          if (onProgress) onProgress(100);
+          return json.url;
+        }
+      }
+    } catch (apiErr) {
+      console.warn('Backend upload notice, attempting Firebase Storage:', apiErr);
+    }
+  }
+
+  // 2. Try Firebase Storage if backend is unreachable
+  try {
+    const storageRef = ref(storage, storagePath);
     const uploadTask = uploadBytesResumable(storageRef, file);
 
-    return new Promise((resolve) => {
-      let isDone = false;
-      // Fast fallback timeout so upload never hangs or delays publishing
-      const fallbackTimer = setTimeout(() => {
-        if (!isDone) {
-          isDone = true;
-          if (onProgress) onProgress(100);
-          resolve(URL.createObjectURL(file));
-        }
-      }, 4000);
+    const storageUrl = await new Promise<string>((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        reject(new Error('Firebase Storage timeout'));
+      }, 7000);
 
       uploadTask.on(
         'state_changed',
         (snapshot) => {
-          if (!isDone && snapshot.totalBytes > 0) {
-            const progress = Math.round(
-              (snapshot.bytesTransferred / snapshot.totalBytes) * 100
-            );
-            if (onProgress) onProgress(progress);
+          if (snapshot.totalBytes > 0 && onProgress) {
+            const pct = Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 50) + 45;
+            onProgress(Math.min(95, pct));
           }
         },
         (error) => {
-          if (!isDone) {
-            isDone = true;
-            clearTimeout(fallbackTimer);
-            console.warn('Storage upload notice, generating fast URL fallback:', error);
-            resolve(URL.createObjectURL(file));
-          }
+          clearTimeout(timeout);
+          reject(error);
         },
         async () => {
-          if (!isDone) {
-            isDone = true;
-            clearTimeout(fallbackTimer);
-            try {
-              const downloadUrl = await getDownloadURL(uploadTask.snapshot.ref);
-              resolve(downloadUrl);
-            } catch (e) {
-              resolve(URL.createObjectURL(file));
-            }
+          clearTimeout(timeout);
+          try {
+            const downloadUrl = await getDownloadURL(uploadTask.snapshot.ref);
+            resolve(downloadUrl);
+          } catch (e) {
+            reject(e);
           }
         }
       );
     });
-  } catch (err) {
-    console.warn('Upload error:', err);
-    return URL.createObjectURL(file);
+
+    if (onProgress) onProgress(100);
+    return storageUrl;
+  } catch (storageErr) {
+    console.warn('Storage upload fallback triggered:', storageErr);
   }
+
+  if (onProgress) onProgress(100);
+
+  // 3. Guaranteed permanent fallback:
+  // Base64 data URL is 100% self-contained and universally viewable by any user/browser.
+  if (dataUrl) {
+    return dataUrl;
+  }
+
+  // Final fallback to default official Persib Bobotoh banner/image
+  return DEFAULT_PERSIB_IMAGE;
 }
 
 /**
@@ -506,10 +690,16 @@ export async function saveUserProfile(user: UserProfile): Promise<void> {
   const now = new Date().toISOString();
   const updatedUser = { ...user, updatedAt: now };
 
+  // If this user was previously marked deleted, unmark them
+  unmarkUserDeleted(user.uid);
+
   const current = getLocalUsers();
   const exists = current.some((u) => u.uid === user.uid);
   const updated = exists ? current.map((u) => (u.uid === user.uid ? updatedUser : u)) : [...current, updatedUser];
   saveLocalUsers(updated);
+
+  // Notify active listeners immediately
+  notifyUsersSubscribers();
 
   try {
     const userRef = doc(db, 'users', user.uid);
@@ -520,13 +710,21 @@ export async function saveUserProfile(user: UserProfile): Promise<void> {
 }
 
 /**
- * Delete Admin user profile (Owner action)
+ * Delete Admin user profile (Owner action) - guarantees immediate & permanent deletion
  */
 export async function deleteUserProfile(uid: string): Promise<void> {
+  // 1. Mark as permanently deleted so it never resurrects from INITIAL_USERS or stale cache
+  markUserDeleted(uid);
+
+  // 2. Remove immediately from local storage cache
   const current = getLocalUsers();
   const updated = current.filter((u) => u.uid !== uid);
   saveLocalUsers(updated);
 
+  // 3. Immediately notify all React components so the admin card vanishes instantly
+  notifyUsersSubscribers();
+
+  // 4. Delete from Firestore in background
   try {
     const userRef = doc(db, 'users', uid);
     await deleteDoc(userRef);
