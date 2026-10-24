@@ -364,8 +364,60 @@ export function subscribeToClips(callback: (clips: ClipItem[]) => void): () => v
  * Subscribe to all admins & users
  */
 export function subscribeToUsers(callback: (users: UserProfile[]) => void): () => void {
-  // Register in userSubscribers for immediate local deletion updates
+  // Register in userSubscribers for immediate local updates
   userSubscribers.add(callback);
+
+  // Synchronously emit current local users immediately with 0ms latency
+  try {
+    callback(getLocalUsers());
+  } catch (syncErr) {
+    console.warn('Initial users emit warning:', syncErr);
+  }
+
+  // 1. Sync server deleted admins so any deleted admin is removed across all browsers & devices
+  fetch('/api/admin/deleted-admins')
+    .then((r) => (r.ok ? r.json() : null))
+    .then((deletedUids) => {
+      if (Array.isArray(deletedUids) && deletedUids.length > 0) {
+        let changed = false;
+        const currentDeleted = getDeletedUserIds();
+        deletedUids.forEach((uid: string) => {
+          if (!currentDeleted.has(uid)) {
+            markUserDeleted(uid);
+            changed = true;
+          }
+        });
+        if (changed) {
+          const cleanLocal = getLocalUsers();
+          saveLocalUsers(cleanLocal);
+          callback(cleanLocal);
+        }
+      }
+    })
+    .catch(() => {});
+
+  // 2. Sync server-persisted admins asynchronously
+  fetch('/api/admin/list-admins')
+    .then((r) => (r.ok ? r.json() : null))
+    .then((serverAdmins) => {
+      if (Array.isArray(serverAdmins) && serverAdmins.length > 0) {
+        const deletedIds = getDeletedUserIds();
+        const currentLocal = getLocalUsers();
+        const userMap = new Map<string, UserProfile>();
+        currentLocal.forEach((u) => {
+          if (!deletedIds.has(u.uid)) userMap.set(u.uid, u);
+        });
+        serverAdmins.forEach((sa) => {
+          if (!deletedIds.has(sa.uid)) {
+            userMap.set(sa.uid, { ...userMap.get(sa.uid), ...sa, profileImage: sanitizeMediaUrl(sa.profileImage) });
+          }
+        });
+        const merged = Array.from(userMap.values());
+        saveLocalUsers(merged);
+        callback(merged);
+      }
+    })
+    .catch(() => {});
 
   try {
     const usersCol = collection(db, 'users');
@@ -373,30 +425,34 @@ export function subscribeToUsers(callback: (users: UserProfile[]) => void): () =
       usersCol,
       (snapshot) => {
         const deletedIds = getDeletedUserIds();
+        const userMap = new Map<string, UserProfile>();
+
+        // 1. Initial default users
+        INITIAL_USERS.forEach((u) => {
+          if (!deletedIds.has(u.uid)) {
+            userMap.set(u.uid, u);
+          }
+        });
+
+        // 2. Existing local users (preserves newly created admins!)
+        getLocalUsers().forEach((u) => {
+          if (!deletedIds.has(u.uid)) {
+            userMap.set(u.uid, { ...userMap.get(u.uid), ...u });
+          }
+        });
+
+        // 3. Firestore snapshot documents
         if (!snapshot.empty) {
-          const list: UserProfile[] = [];
           snapshot.forEach((d) => {
             if (!deletedIds.has(d.id)) {
-              list.push({ ...d.data(), uid: d.id } as UserProfile);
+              userMap.set(d.id, { ...userMap.get(d.id), ...d.data(), uid: d.id } as UserProfile);
             }
           });
-          const userMap = new Map<string, UserProfile>();
-          INITIAL_USERS.forEach((u) => {
-            if (!deletedIds.has(u.uid)) {
-              userMap.set(u.uid, u);
-            }
-          });
-          list.forEach((u) => {
-            if (!deletedIds.has(u.uid)) {
-              userMap.set(u.uid, { ...userMap.get(u.uid), ...u });
-            }
-          });
-          const merged = Array.from(userMap.values());
-          saveLocalUsers(merged);
-          callback(merged);
-        } else {
-          callback(getLocalUsers());
         }
+
+        const merged = Array.from(userMap.values());
+        saveLocalUsers(merged);
+        callback(merged);
       },
       (error) => {
         handleFirestoreError(error, OperationType.LIST, 'users');
@@ -701,6 +757,13 @@ export async function saveUserProfile(user: UserProfile): Promise<void> {
   // Notify active listeners immediately
   notifyUsersSubscribers();
 
+  // Sync to server storage
+  fetch('/api/admin/update-admin', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ uid: user.uid, updates: updatedUser }),
+  }).catch(() => {});
+
   try {
     const userRef = doc(db, 'users', user.uid);
     await setDoc(userRef, updatedUser, { merge: true });
@@ -724,7 +787,14 @@ export async function deleteUserProfile(uid: string): Promise<void> {
   // 3. Immediately notify all React components so the admin card vanishes instantly
   notifyUsersSubscribers();
 
-  // 4. Delete from Firestore in background
+  // 4. Notify backend server
+  fetch('/api/admin/delete-admin', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ uid }),
+  }).catch(() => {});
+
+  // 5. Delete from Firestore in background
   try {
     const userRef = doc(db, 'users', uid);
     await deleteDoc(userRef);
