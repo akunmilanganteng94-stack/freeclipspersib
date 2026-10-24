@@ -226,9 +226,13 @@ if (!fs.existsSync(dataDir)) {
 }
 const adminsFile = path.join(dataDir, 'admins.json');
 const deletedAdminsFile = path.join(dataDir, 'deleted_admins.json');
+const clipsFile = path.join(dataDir, 'clips.json');
 
 if (!fs.existsSync(deletedAdminsFile)) {
   fs.writeFileSync(deletedAdminsFile, JSON.stringify([], null, 2), 'utf-8');
+}
+if (!fs.existsSync(clipsFile)) {
+  fs.writeFileSync(clipsFile, JSON.stringify([], null, 2), 'utf-8');
 }
 
 const DEFAULT_SERVER_ADMINS = [
@@ -278,15 +282,26 @@ const DEFAULT_SERVER_ADMINS = [
 
 if (!fs.existsSync(adminsFile)) {
   fs.writeFileSync(adminsFile, JSON.stringify(DEFAULT_SERVER_ADMINS, null, 2), 'utf-8');
-} else {
+}
+
+function getStoredClips(): any[] {
   try {
-    const raw = fs.readFileSync(adminsFile, 'utf-8');
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed) || parsed.length === 0) {
-      fs.writeFileSync(adminsFile, JSON.stringify(DEFAULT_SERVER_ADMINS, null, 2), 'utf-8');
+    if (fs.existsSync(clipsFile)) {
+      const content = fs.readFileSync(clipsFile, 'utf-8');
+      const parsed = JSON.parse(content);
+      if (Array.isArray(parsed)) return parsed;
     }
-  } catch {
-    fs.writeFileSync(adminsFile, JSON.stringify(DEFAULT_SERVER_ADMINS, null, 2), 'utf-8');
+  } catch (err) {
+    console.error('Error reading clips.json:', err);
+  }
+  return [];
+}
+
+function saveStoredClips(clips: any[]) {
+  try {
+    fs.writeFileSync(clipsFile, JSON.stringify(clips, null, 2), 'utf-8');
+  } catch (err) {
+    console.error('Error writing clips.json:', err);
   }
 }
 
@@ -316,7 +331,7 @@ function getStoredAdmins(): any[] {
     if (fs.existsSync(adminsFile)) {
       const content = fs.readFileSync(adminsFile, 'utf-8');
       const parsed = JSON.parse(content);
-      if (Array.isArray(parsed) && parsed.length > 0) {
+      if (Array.isArray(parsed)) {
         return parsed;
       }
     }
@@ -333,6 +348,48 @@ function saveStoredAdmins(admins: any[]) {
     console.error('Error writing admins.json:', err);
   }
 }
+
+// Clips API Endpoints (Auto-sync for real-time changes)
+app.get('/api/clips/list', (_req: Request, res: Response) => {
+  try {
+    return res.json(getStoredClips());
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/clips/save', (req: Request, res: Response) => {
+  try {
+    const clip = req.body;
+    if (!clip || !clip.clipId) {
+      return res.status(400).json({ error: 'clipId is required' });
+    }
+    const stored = getStoredClips();
+    const idx = stored.findIndex((c) => c.clipId === clip.clipId);
+    if (idx >= 0) {
+      stored[idx] = { ...stored[idx], ...clip, updatedAt: new Date().toISOString() };
+    } else {
+      stored.unshift({ ...clip, updatedAt: new Date().toISOString() });
+    }
+    saveStoredClips(stored);
+    return res.json({ success: true, clipId: clip.clipId });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/clips/delete', (req: Request, res: Response) => {
+  try {
+    const { clipId } = req.body;
+    if (!clipId) return res.status(400).json({ error: 'clipId is required' });
+    const stored = getStoredClips();
+    const filtered = stored.filter((c) => c.clipId !== clipId);
+    saveStoredClips(filtered);
+    return res.json({ success: true, deletedClipId: clipId });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
 
 // 4. Create Admin Account without overriding Owner's frontend Firebase Auth session
 app.post('/api/admin/create-admin', async (req: Request, res: Response) => {
