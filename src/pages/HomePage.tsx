@@ -68,50 +68,55 @@ export const HomePage: React.FC<HomePageProps> = ({ clips, admins, siteSettings,
   }, [admins]);
 
   return (
-    <div className="space-y-8 sm:space-y-10">
-      {/* A. Hero Section (Dibuat lebih ringkas & proporsional agar hemat tempat) */}
-      <section className="relative overflow-hidden rounded-2xl sm:rounded-3xl bg-gradient-to-br from-blue-900 via-blue-800 to-indigo-950 text-white shadow-lg p-5 sm:p-7 lg:p-8 border border-blue-700/40">
+    <div className="space-y-5 sm:space-y-6">
+      {/* A. Hero Section (Desain ringkas, hemat tempat, tidak memakan layar) */}
+      <section className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-blue-900 via-blue-800 to-indigo-950 text-white shadow-md p-3.5 sm:p-4.5 border border-blue-700/40">
         {/* Subtle stadium backdrop image */}
-        <div className="absolute inset-0 opacity-20 pointer-events-none mix-blend-overlay">
+        <div className="absolute inset-0 opacity-15 pointer-events-none mix-blend-overlay">
           <img
             src="/src/assets/images/hero_persib_stadium_1792849004095.jpg"
             alt="Persib Stadium Background"
             className="w-full h-full object-cover"
           />
         </div>
-        <div className="absolute -right-20 -top-20 w-72 h-72 bg-blue-500/20 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute -left-20 -bottom-20 w-72 h-72 bg-sky-400/15 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute -right-10 -top-10 w-44 h-44 bg-blue-500/20 rounded-full blur-2xl pointer-events-none" />
 
-        <div className="relative z-10 max-w-2xl space-y-3.5">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 backdrop-blur-md border border-white/20 text-blue-200 text-[11px] sm:text-xs font-bold tracking-wide uppercase">
-            <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-            <span>Platform Resmi Bebas Unduh Bobotoh</span>
+        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-3">
+          {/* Sisi Kiri: Judul Ringkas & Deskripsi Singkat */}
+          <div className="space-y-1 max-w-xl">
+            <div className="flex items-center gap-2">
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/10 border border-white/20 text-sky-200 text-[10px] font-bold uppercase tracking-wider">
+                <Sparkles className="w-3 h-3 text-amber-400" />
+                <span>Bebas Unduh Bobotoh</span>
+              </span>
+              <span className="text-[11px] text-blue-200/80 hidden sm:inline">• 100% Gratis</span>
+            </div>
+
+            <h1 className="text-lg sm:text-xl md:text-2xl font-black tracking-tight text-white flex items-center gap-1.5 leading-tight">
+              <span>FREE PERSIB</span>
+              <span className="text-sky-300">CLIPS</span>
+            </h1>
+
+            <p className="text-[11px] sm:text-xs text-blue-100/90 leading-snug">
+              Kumpulan clips Persib Bandung gratis tanpa login. Tonton & unduh 3 media HD sekaligus!
+            </p>
           </div>
 
-          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-black tracking-tight leading-tight text-white">
-            FREE PERSIB <span className="text-sky-300">CLIPS</span>
-          </h1>
-
-          <p className="text-xs sm:text-sm text-blue-100 max-w-xl leading-relaxed font-normal">
-            Kumpulan clips Persib Bandung gratis untuk semua Bobotoh. Cari, tonton, download 3 media
-            sekaligus, dan bagikan momen magis Pangeran Biru!
-          </p>
-
-          {/* CTA Buttons */}
-          <div className="flex flex-wrap items-center gap-2.5 pt-1">
+          {/* Sisi Kanan: Tombol Aksi Ringkas & Quick Stats */}
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
             <button
               onClick={() => onNavigate('/clips')}
-              className="px-4 sm:px-5 py-2.5 rounded-xl bg-white text-blue-900 font-extrabold text-xs sm:text-sm hover:bg-blue-50 transition-all shadow-md active:scale-95 cursor-pointer flex items-center gap-2"
+              className="px-3 py-1.5 rounded-xl bg-white text-blue-900 font-extrabold text-xs hover:bg-blue-50 transition-all shadow-xs active:scale-95 cursor-pointer flex items-center gap-1.5"
             >
-              <Video className="w-4 h-4 text-blue-700" />
-              <span>Jelajahi Clips</span>
+              <Video className="w-3.5 h-3.5 text-blue-700" />
+              <span>Jelajahi ({clips.length})</span>
             </button>
             <button
               onClick={() => onNavigate('/trending')}
-              className="px-4 sm:px-5 py-2.5 rounded-xl bg-blue-600/60 text-white font-extrabold text-xs sm:text-sm hover:bg-blue-600 transition-all border border-blue-400/40 backdrop-blur-md active:scale-95 cursor-pointer flex items-center gap-2"
+              className="px-3 py-1.5 rounded-xl bg-blue-600/60 text-white font-extrabold text-xs hover:bg-blue-600 transition-all border border-blue-400/40 backdrop-blur-md active:scale-95 cursor-pointer flex items-center gap-1.5"
             >
-              <Flame className="w-4 h-4 text-amber-400 fill-current" />
-              <span>Clips Trending</span>
+              <Flame className="w-3.5 h-3.5 text-amber-400 fill-current" />
+              <span>Trending</span>
             </button>
 
             {siteSettings?.apkDownloadUrl && siteSettings.apkEnabled !== false && (
@@ -119,34 +124,21 @@ export const HomePage: React.FC<HomePageProps> = ({ clips, admins, siteSettings,
                 href={siteSettings.apkDownloadUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="px-4 sm:px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-500 text-white font-extrabold text-xs sm:text-sm hover:from-emerald-500 hover:to-teal-400 transition-all shadow-md active:scale-95 cursor-pointer flex items-center gap-2 border border-emerald-400/30"
+                className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-500 text-white font-extrabold text-xs hover:from-emerald-500 hover:to-teal-400 transition-all shadow-xs active:scale-95 cursor-pointer flex items-center gap-1.5 border border-emerald-400/30"
                 title={`Download Versi APK Android (${siteSettings.apkVersionName || 'Official'})`}
               >
-                <Smartphone className="w-4 h-4 text-emerald-100" />
-                <span>Download Versi APK ({siteSettings.apkVersionName || 'Official'})</span>
+                <Smartphone className="w-3.5 h-3.5 text-emerald-100" />
+                <span>APK</span>
               </a>
             )}
-          </div>
 
-          {/* Quick Bobotoh KPI Bar */}
-          <div className="grid grid-cols-3 gap-3 pt-3.5 mt-3.5 border-t border-white/15 max-w-md">
-            <div>
-              <p className="text-xl sm:text-2xl font-black text-white tabular-nums">
-                {totalDownloads.toLocaleString()}
-              </p>
-              <p className="text-[10px] sm:text-[11px] text-blue-200 font-medium">Total Download</p>
-            </div>
-            <div>
-              <p className="text-xl sm:text-2xl font-black text-white tabular-nums">
-                {clips.length}
-              </p>
-              <p className="text-[10px] sm:text-[11px] text-blue-200 font-medium">Total Clips HD</p>
-            </div>
-            <div>
-              <p className="text-xl sm:text-2xl font-black text-white">
-                100%
-              </p>
-              <p className="text-[10px] sm:text-[11px] text-blue-200 font-medium">Gratis Tanpa Login</p>
+            <div className="hidden lg:flex items-center gap-3 pl-2.5 border-l border-white/20 text-right">
+              <div>
+                <p className="text-sm font-black text-white tabular-nums leading-none">
+                  {totalDownloads.toLocaleString()}
+                </p>
+                <p className="text-[9px] text-blue-200 uppercase font-semibold mt-0.5">Total Unduhan</p>
+              </div>
             </div>
           </div>
         </div>
