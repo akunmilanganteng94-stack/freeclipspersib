@@ -2,6 +2,7 @@ import React from 'react';
 import { ArrowLeft, Video, MessageCircle, ExternalLink, ShieldCheck, Download } from 'lucide-react';
 import { UserProfile, ClipItem } from '../types';
 import { ClipCard } from '../components/ClipCard';
+import { getDeletedUserIds } from '../services/clipsService';
 
 interface AdminProfilePageProps {
   adminId: string;
@@ -18,8 +19,10 @@ export const AdminProfilePage: React.FC<AdminProfilePageProps> = ({
   onNavigate,
   onShowToast,
 }) => {
-  // Find admin by uid or fallback
-  const admin = admins.find((a) => a.uid === adminId) || admins[0];
+  // Find admin by uid (excluding deleted admins)
+  const deletedIds = getDeletedUserIds();
+  const validAdmins = admins.filter((a) => !deletedIds.has(a.uid));
+  const admin = validAdmins.find((a) => a.uid === adminId) || validAdmins[0];
   const adminClips = clips.filter((c) => c.uploaderUid === admin?.uid && c.published);
   const totalDownloads = adminClips.reduce((acc, c) => acc + (c.downloadCount || 0), 0);
 
@@ -56,6 +59,12 @@ export const AdminProfilePage: React.FC<AdminProfilePageProps> = ({
             alt={admin.adminName}
             className="w-24 h-24 sm:w-28 sm:h-28 rounded-3xl object-cover border-4 border-blue-100 shadow-md"
             referrerPolicy="no-referrer"
+            onError={(e) => {
+              const target = e.currentTarget;
+              if (!target.src.includes('1366b69ba442d21911f314947331b50a')) {
+                target.src = 'https://i.postimg.cc/4ysQFgqx/1366b69ba442d21911f314947331b50a.jpg';
+              }
+            }}
           />
 
           <div className="space-y-2 flex-1">

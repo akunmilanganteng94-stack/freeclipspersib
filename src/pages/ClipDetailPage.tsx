@@ -278,6 +278,12 @@ export const ClipDetailPage: React.FC<ClipDetailPageProps> = ({
                   alt={clip.title}
                   className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-102"
                   referrerPolicy="no-referrer"
+                  onError={(e) => {
+                    const target = e.currentTarget;
+                    if (!target.src.includes('1366b69ba442d21911f314947331b50a')) {
+                      target.src = 'https://i.postimg.cc/4ysQFgqx/1366b69ba442d21911f314947331b50a.jpg';
+                    }
+                  }}
                 />
                 <div className="absolute inset-0 bg-black/20 group-hover:bg-black/10 transition-colors flex items-center justify-center">
                   <div className="p-3 rounded-full bg-black/60 text-white backdrop-blur-xs opacity-0 group-hover:opacity-100 transition-opacity">
@@ -310,6 +316,12 @@ export const ClipDetailPage: React.FC<ClipDetailPageProps> = ({
                     alt={`${clip.title} - Foto 1`}
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                     referrerPolicy="no-referrer"
+                    onError={(e) => {
+                      const target = e.currentTarget;
+                      if (!target.src.includes('1366b69ba442d21911f314947331b50a')) {
+                        target.src = 'https://i.postimg.cc/4ysQFgqx/1366b69ba442d21911f314947331b50a.jpg';
+                      }
+                    }}
                   />
                   <div className="absolute top-2 left-2 px-2 py-0.5 rounded-md bg-black/60 text-white text-[10px] font-bold backdrop-blur-xs">
                     Foto 1
@@ -345,6 +357,12 @@ export const ClipDetailPage: React.FC<ClipDetailPageProps> = ({
                     alt={`${clip.title} - Foto 2`}
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                     referrerPolicy="no-referrer"
+                    onError={(e) => {
+                      const target = e.currentTarget;
+                      if (!target.src.includes('1366b69ba442d21911f314947331b50a')) {
+                        target.src = 'https://i.postimg.cc/4ysQFgqx/1366b69ba442d21911f314947331b50a.jpg';
+                      }
+                    }}
                   />
                   <div className="absolute top-2 left-2 px-2 py-0.5 rounded-md bg-black/60 text-white text-[10px] font-bold backdrop-blur-xs">
                     Foto 2
@@ -400,9 +418,20 @@ export const ClipDetailPage: React.FC<ClipDetailPageProps> = ({
                 <span className="text-slate-400 font-medium">Pengunggah (Admin):</span>
                 <button
                   onClick={() => onNavigate(`/admin/${clip.uploaderUid}`)}
-                  className="font-bold text-blue-700 hover:underline flex items-center gap-1 cursor-pointer"
+                  className="font-bold text-blue-700 hover:underline flex items-center gap-1.5 cursor-pointer"
                 >
-                  <User className="w-3 h-3" />
+                  <img
+                    src={uploader?.profileImage || 'https://i.postimg.cc/4ysQFgqx/1366b69ba442d21911f314947331b50a.jpg'}
+                    alt={clip.uploaderNameSnapshot}
+                    className="w-4 h-4 rounded-full object-cover border border-blue-200"
+                    referrerPolicy="no-referrer"
+                    onError={(e) => {
+                      const target = e.currentTarget;
+                      if (!target.src.includes('1366b69ba442d21911f314947331b50a')) {
+                        target.src = 'https://i.postimg.cc/4ysQFgqx/1366b69ba442d21911f314947331b50a.jpg';
+                      }
+                    }}
+                  />
                   <span>{clip.uploaderNameSnapshot}</span>
                 </button>
               </div>

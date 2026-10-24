@@ -166,10 +166,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ clips, onNavigat
       const url = await uploadMediaFile(file, avatarPath);
       setProfileImage(url);
       onShowToast('Foto profil baru berhasil diunggah!', 'success');
-    } catch {
-      const localUrl = URL.createObjectURL(file);
-      setProfileImage(localUrl);
-      onShowToast('Foto profil dipilih!', 'success');
+    } catch (err: any) {
+      onShowToast('Gagal mengunggah foto profil: ' + (err.message || 'Error'), 'error');
     } finally {
       setIsUploadingAvatar(false);
     }
@@ -517,10 +515,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ clips, onNavigat
                     <div className="flex gap-3">
                       <div className="relative w-24 h-20 rounded-xl overflow-hidden bg-slate-900 shrink-0">
                         <img
-                          src={c.photoOneUrl || c.primaryMediaUrl}
+                          src={c.photoOneUrl || c.primaryMediaUrl || 'https://i.postimg.cc/4ysQFgqx/1366b69ba442d21911f314947331b50a.jpg'}
                           alt={c.title}
                           className="w-full h-full object-cover"
                           referrerPolicy="no-referrer"
+                          onError={(e) => {
+                            const target = e.currentTarget;
+                            if (!target.src.includes('1366b69ba442d21911f314947331b50a')) {
+                              target.src = 'https://i.postimg.cc/4ysQFgqx/1366b69ba442d21911f314947331b50a.jpg';
+                            }
+                          }}
                         />
                         <span className="absolute bottom-1 left-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-black/70 text-white">
                           {c.primaryMediaType === 'video' ? 'Video' : 'Foto'}
@@ -852,6 +856,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ clips, onNavigat
                     alt="Avatar"
                     className="w-full h-full object-cover"
                     referrerPolicy="no-referrer"
+                    onError={(e) => {
+                      const target = e.currentTarget;
+                      if (!target.src.includes('1366b69ba442d21911f314947331b50a')) {
+                        target.src = 'https://i.postimg.cc/4ysQFgqx/1366b69ba442d21911f314947331b50a.jpg';
+                      }
+                    }}
                   />
                   {isUploadingAvatar && (
                     <div className="absolute inset-0 bg-black/60 flex items-center justify-center text-[10px] text-white font-bold">

@@ -38,6 +38,7 @@ import {
   updateSiteSettings,
   uploadMediaFile,
   createNewClip,
+  getDeletedUserIds,
 } from '../services/clipsService';
 
 interface OwnerDashboardProps {
@@ -124,9 +125,15 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
     return clips.reduce((acc, c) => acc + (c.downloadCount || 0), 0);
   }, [clips]);
 
-  const activeAdminsCount = useMemo(() => {
-    return admins.filter((a) => a.active).length;
+  // Instant filtered admins list (excluding any permanently deleted IDs)
+  const currentAdmins = useMemo(() => {
+    const deletedIds = getDeletedUserIds();
+    return admins.filter((a) => !deletedIds.has(a.uid));
   }, [admins]);
+
+  const activeAdminsCount = useMemo(() => {
+    return currentAdmins.filter((a) => a.active).length;
+  }, [currentAdmins]);
 
   const topClips = useMemo(() => {
     return [...clips].sort((a, b) => (b.downloadCount || 0) - (a.downloadCount || 0)).slice(0, 5);
@@ -155,7 +162,7 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
       const url = await uploadMediaFile(file, avatarPath);
       return url;
     } catch {
-      return URL.createObjectURL(file);
+      return 'https://i.postimg.cc/4ysQFgqx/1366b69ba442d21911f314947331b50a.jpg';
     }
   };
 
@@ -571,10 +578,16 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
                         <td className="p-3.5 max-w-xs">
                           <div className="flex items-center gap-3">
                             <img
-                              src={clip.photoOneUrl || clip.primaryMediaUrl}
+                              src={clip.photoOneUrl || clip.primaryMediaUrl || 'https://i.postimg.cc/4ysQFgqx/1366b69ba442d21911f314947331b50a.jpg'}
                               alt={clip.title}
                               className="w-12 h-9 rounded-lg object-cover bg-slate-900 shrink-0"
                               referrerPolicy="no-referrer"
+                              onError={(e) => {
+                                const target = e.currentTarget;
+                                if (!target.src.includes('1366b69ba442d21911f314947331b50a')) {
+                                  target.src = 'https://i.postimg.cc/4ysQFgqx/1366b69ba442d21911f314947331b50a.jpg';
+                                }
+                              }}
                             />
                             <div className="min-w-0">
                               <p className="font-bold text-slate-900 truncate">{clip.title}</p>
@@ -906,7 +919,7 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {admins.map((adm) => {
+                  {currentAdmins.map((adm) => {
                     const count = clips.filter((c) => c.uploaderUid === adm.uid).length;
                     const isOwnerAccount = adm.role === 'owner';
                     return (
@@ -918,6 +931,12 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
                               alt={adm.adminName}
                               className="w-9 h-9 rounded-full object-cover border border-slate-200 shrink-0"
                               referrerPolicy="no-referrer"
+                              onError={(e) => {
+                                const target = e.currentTarget;
+                                if (!target.src.includes('1366b69ba442d21911f314947331b50a')) {
+                                  target.src = 'https://i.postimg.cc/4ysQFgqx/1366b69ba442d21911f314947331b50a.jpg';
+                                }
+                              }}
                             />
                             <div className="min-w-0">
                               <p className="font-bold text-slate-800 truncate">{adm.adminName}</p>
@@ -1036,8 +1055,8 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
                             const url = await uploadAvatarFile(file);
                             setOwnerAvatar(url);
                             onShowToast('Foto profil Owner berhasil diunggah!', 'success');
-                          } catch {
-                            setOwnerAvatar(URL.createObjectURL(file));
+                          } catch (err: any) {
+                            onShowToast('Gagal mengunggah foto: ' + (err.message || 'Error'), 'error');
                           }
                         }}
                         className="hidden"
@@ -1309,8 +1328,8 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
                           try {
                             const url = await uploadAvatarFile(file);
                             setNewAdminProfileImage(url);
-                          } catch {
-                            setNewAdminProfileImage(URL.createObjectURL(file));
+                          } catch (err: any) {
+                            onShowToast('Gagal mengunggah foto: ' + (err.message || 'Error'), 'error');
                           }
                         }}
                         className="hidden"
@@ -1450,8 +1469,8 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
                             const url = await uploadAvatarFile(file);
                             setEditingAdmin({ ...editingAdmin, profileImage: url });
                             onShowToast('Foto profil admin berhasil diunggah!', 'success');
-                          } catch {
-                            setEditingAdmin({ ...editingAdmin, profileImage: URL.createObjectURL(file) });
+                          } catch (err: any) {
+                            onShowToast('Gagal mengunggah foto: ' + (err.message || 'Error'), 'error');
                           }
                         }}
                         className="hidden"

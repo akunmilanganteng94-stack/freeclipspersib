@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { Users, Video, MessageCircle, ExternalLink, ShieldCheck } from 'lucide-react';
 import { UserProfile, ClipItem } from '../types';
-import { INITIAL_USERS } from '../services/clipsService';
+import { INITIAL_USERS, getDeletedUserIds } from '../services/clipsService';
 
 interface AllAdminPageProps {
   admins: UserProfile[];
@@ -10,14 +10,23 @@ interface AllAdminPageProps {
 }
 
 export const AllAdminPage: React.FC<AllAdminPageProps> = ({ admins, clips, onNavigate }) => {
-  // Pastikan seluruh admin dan owner muncul lengkap tanpa ada yang terpotong/tersembunyi
+  // Pastikan seluruh admin dan owner muncul lengkap, kecuali yang sudah dihapus oleh Owner
   const allAdmins = useMemo(() => {
+    const deletedIds = getDeletedUserIds();
     const userMap = new Map<string, UserProfile>();
-    INITIAL_USERS.forEach((u) => userMap.set(u.uid, u));
+    INITIAL_USERS.forEach((u) => {
+      if (!deletedIds.has(u.uid)) {
+        userMap.set(u.uid, u);
+      }
+    });
     if (admins && admins.length > 0) {
-      admins.forEach((u) => userMap.set(u.uid, { ...userMap.get(u.uid), ...u }));
+      admins.forEach((u) => {
+        if (!deletedIds.has(u.uid)) {
+          userMap.set(u.uid, { ...userMap.get(u.uid), ...u });
+        }
+      });
     }
-    return Array.from(userMap.values());
+    return Array.from(userMap.values()).filter((u) => !deletedIds.has(u.uid));
   }, [admins]);
 
   return (
@@ -73,6 +82,12 @@ export const AllAdminPage: React.FC<AllAdminPageProps> = ({ admins, clips, onNav
                   alt={admin.adminName}
                   className="w-16 h-16 rounded-2xl object-cover border-2 border-blue-200 shadow-xs"
                   referrerPolicy="no-referrer"
+                  onError={(e) => {
+                    const target = e.currentTarget;
+                    if (!target.src.includes('1366b69ba442d21911f314947331b50a')) {
+                      target.src = 'https://i.postimg.cc/4ysQFgqx/1366b69ba442d21911f314947331b50a.jpg';
+                    }
+                  }}
                 />
                 <div className="min-w-0 flex-1">
                   <h3
