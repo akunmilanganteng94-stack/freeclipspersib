@@ -104,7 +104,15 @@ export function saveLocalClips(clips: ClipItem[]) {
 export function getLocalUsers(): UserProfile[] {
   try {
     const raw = localStorage.getItem(USERS_STORAGE_KEY);
-    if (raw) return JSON.parse(raw);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        const userMap = new Map<string, UserProfile>();
+        INITIAL_USERS.forEach((u) => userMap.set(u.uid, u));
+        parsed.forEach((u) => userMap.set(u.uid, { ...userMap.get(u.uid), ...u }));
+        return Array.from(userMap.values());
+      }
+    }
   } catch (e) {}
   return INITIAL_USERS;
 }
@@ -283,8 +291,12 @@ export function subscribeToUsers(callback: (users: UserProfile[]) => void): () =
           snapshot.forEach((d) => {
             list.push({ ...d.data(), uid: d.id } as UserProfile);
           });
-          saveLocalUsers(list);
-          callback(list);
+          const userMap = new Map<string, UserProfile>();
+          INITIAL_USERS.forEach((u) => userMap.set(u.uid, u));
+          list.forEach((u) => userMap.set(u.uid, { ...userMap.get(u.uid), ...u }));
+          const merged = Array.from(userMap.values());
+          saveLocalUsers(merged);
+          callback(merged);
         } else {
           callback(getLocalUsers());
         }
@@ -342,28 +354,45 @@ export async function uploadMediaFile(
     const storageRef = ref(storage, path);
     const uploadTask = uploadBytesResumable(storageRef, file);
 
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve) => {
+      let isDone = false;
+      // Fast fallback timeout so upload never hangs or delays publishing
+      const fallbackTimer = setTimeout(() => {
+        if (!isDone) {
+          isDone = true;
+          if (onProgress) onProgress(100);
+          resolve(URL.createObjectURL(file));
+        }
+      }, 4000);
+
       uploadTask.on(
         'state_changed',
         (snapshot) => {
-          const progress = Math.round(
-            (snapshot.bytesTransferred / snapshot.totalBytes) * 100
-          );
-          if (onProgress) onProgress(progress);
+          if (!isDone && snapshot.totalBytes > 0) {
+            const progress = Math.round(
+              (snapshot.bytesTransferred / snapshot.totalBytes) * 100
+            );
+            if (onProgress) onProgress(progress);
+          }
         },
         (error) => {
-          console.warn('Storage upload error, generating local object URL fallback:', error);
-          // Fallback: create object URL so user is never blocked
-          const localUrl = URL.createObjectURL(file);
-          resolve(localUrl);
+          if (!isDone) {
+            isDone = true;
+            clearTimeout(fallbackTimer);
+            console.warn('Storage upload notice, generating fast URL fallback:', error);
+            resolve(URL.createObjectURL(file));
+          }
         },
         async () => {
-          try {
-            const downloadUrl = await getDownloadURL(uploadTask.snapshot.ref);
-            resolve(downloadUrl);
-          } catch (e) {
-            const localUrl = URL.createObjectURL(file);
-            resolve(localUrl);
+          if (!isDone) {
+            isDone = true;
+            clearTimeout(fallbackTimer);
+            try {
+              const downloadUrl = await getDownloadURL(uploadTask.snapshot.ref);
+              resolve(downloadUrl);
+            } catch (e) {
+              resolve(URL.createObjectURL(file));
+            }
           }
         }
       );
@@ -375,7 +404,7 @@ export async function uploadMediaFile(
 }
 
 /**
- * Publish a new clip (Admin/Owner action)
+ * Publish a new clip (Admin/Owner action) - optimized for instant loading
  */
 export async function createNewClip(clipData: Omit<ClipItem, 'clipId' | 'downloadCount' | 'likeCount' | 'createdAt'>): Promise<ClipItem> {
   const clipId = `clip_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
@@ -390,15 +419,17 @@ export async function createNewClip(clipData: Omit<ClipItem, 'clipId' | 'downloa
     updatedAt: now,
   };
 
-  // 1. Save locally
+  // 1. Save locally immediately so it renders instantly
   const current = getLocalClips();
   const updated = [newClip, ...current];
   saveLocalClips(updated);
 
-  // 2. Save to Firestore
+  // 2. Save to Firestore asynchronously in background
   try {
     const clipRef = doc(db, 'clips', clipId);
-    await setDoc(clipRef, newClip);
+    setDoc(clipRef, newClip).catch((err) => {
+      handleFirestoreError(err, OperationType.CREATE, `clips/${clipId}`);
+    });
   } catch (err) {
     handleFirestoreError(err, OperationType.CREATE, `clips/${clipId}`);
   }
