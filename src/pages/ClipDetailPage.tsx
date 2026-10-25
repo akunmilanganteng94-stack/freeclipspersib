@@ -20,7 +20,7 @@ import { VideoPlayer } from '../components/VideoPlayer';
 import { ImageLightbox } from '../components/ImageLightbox';
 import { ShareModal } from '../components/ShareModal';
 import { ClipCard } from '../components/ClipCard';
-import { trackDownload, isClipLikedLocally, toggleClipLike } from '../services/clipsService';
+import { trackDownload, isClipLikedLocally, toggleClipLike, isUserDeleted } from '../services/clipsService';
 
 interface ClipDetailPageProps {
   slug: string;
@@ -416,24 +416,31 @@ export const ClipDetailPage: React.FC<ClipDetailPageProps> = ({
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-slate-400 font-medium">Pengunggah (Admin):</span>
-                <button
-                  onClick={() => onNavigate(`/admin/${clip.uploaderUid}`)}
-                  className="font-bold text-blue-700 hover:underline flex items-center gap-1.5 cursor-pointer"
-                >
-                  <img
-                    src={uploader?.profileImage || 'https://i.postimg.cc/4ysQFgqx/1366b69ba442d21911f314947331b50a.jpg'}
-                    alt={clip.uploaderNameSnapshot}
-                    className="w-4 h-4 rounded-full object-cover border border-blue-200"
-                    referrerPolicy="no-referrer"
-                    onError={(e) => {
-                      const target = e.currentTarget;
-                      if (!target.src.includes('1366b69ba442d21911f314947331b50a')) {
-                        target.src = 'https://i.postimg.cc/4ysQFgqx/1366b69ba442d21911f314947331b50a.jpg';
-                      }
-                    }}
-                  />
-                  <span>{clip.uploaderNameSnapshot}</span>
-                </button>
+                {isUserDeleted(clip.uploaderUid) || !uploader ? (
+                  <span className="font-semibold text-slate-600 flex items-center gap-1.5">
+                    <span>{clip.uploaderNameSnapshot || 'Official Persib'}</span>
+                    <span className="text-[10px] text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded-md">(Arsip)</span>
+                  </span>
+                ) : (
+                  <button
+                    onClick={() => onNavigate(`/admin/${clip.uploaderUid}`)}
+                    className="font-bold text-blue-700 hover:underline flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <img
+                      src={uploader?.profileImage || 'https://i.postimg.cc/4ysQFgqx/1366b69ba442d21911f314947331b50a.jpg'}
+                      alt={clip.uploaderNameSnapshot}
+                      className="w-4 h-4 rounded-full object-cover border border-blue-200"
+                      referrerPolicy="no-referrer"
+                      onError={(e) => {
+                        const target = e.currentTarget;
+                        if (!target.src.includes('1366b69ba442d21911f314947331b50a')) {
+                          target.src = 'https://i.postimg.cc/4ysQFgqx/1366b69ba442d21911f314947331b50a.jpg';
+                        }
+                      }}
+                    />
+                    <span>{clip.uploaderNameSnapshot}</span>
+                  </button>
+                )}
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-slate-400 font-medium">Tanggal Rilis:</span>

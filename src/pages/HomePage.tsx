@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { Search, Flame, Video, X, Sparkles, Download, Users, ArrowRight, Smartphone } from 'lucide-react';
 import { ClipItem, UserProfile, SiteSettings } from '../types';
 import { ClipCard } from '../components/ClipCard';
-import { INITIAL_USERS, getDeletedUserIds, getLocalUsers } from '../services/clipsService';
+import { INITIAL_USERS, getDeletedUserIds, getLocalUsers, isUserDeleted } from '../services/clipsService';
 
 interface HomePageProps {
   clips: ClipItem[];
@@ -47,16 +47,15 @@ export const HomePage: React.FC<HomePageProps> = ({ clips, admins, siteSettings,
 
   // Synchronized active admins (identically reflects additions, edits, and deletions)
   const activeAdmins = useMemo(() => {
-    const deletedIds = getDeletedUserIds();
     const sourceList = admins && admins.length > 0 ? admins : getLocalUsers();
     const userMap = new Map<string, UserProfile>();
 
     INITIAL_USERS.forEach((u) => {
-      if (!deletedIds.has(u.uid)) userMap.set(u.uid, u);
+      if (!isUserDeleted(u)) userMap.set(u.uid, u);
     });
 
     sourceList.forEach((u) => {
-      if (!deletedIds.has(u.uid)) {
+      if (!isUserDeleted(u)) {
         userMap.set(u.uid, {
           ...(userMap.get(u.uid) || {}),
           ...u,
@@ -64,7 +63,7 @@ export const HomePage: React.FC<HomePageProps> = ({ clips, admins, siteSettings,
       }
     });
 
-    return Array.from(userMap.values()).filter((u) => !deletedIds.has(u.uid) && u.active !== false);
+    return Array.from(userMap.values()).filter((u) => !isUserDeleted(u) && u.active !== false);
   }, [admins]);
 
   return (

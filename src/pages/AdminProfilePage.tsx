@@ -2,7 +2,7 @@ import React from 'react';
 import { ArrowLeft, Video, MessageCircle, ExternalLink, ShieldCheck, Download } from 'lucide-react';
 import { UserProfile, ClipItem } from '../types';
 import { ClipCard } from '../components/ClipCard';
-import { getDeletedUserIds, getLocalUsers } from '../services/clipsService';
+import { getDeletedUserIds, getLocalUsers, isUserDeleted } from '../services/clipsService';
 
 interface AdminProfilePageProps {
   adminId: string;
@@ -20,10 +20,11 @@ export const AdminProfilePage: React.FC<AdminProfilePageProps> = ({
   onShowToast,
 }) => {
   // Find admin by uid (strictly excluding deleted admins)
-  const deletedIds = getDeletedUserIds();
   const sourceList = admins && admins.length > 0 ? admins : getLocalUsers();
-  const validAdmins = sourceList.filter((a) => !deletedIds.has(a.uid));
-  const admin = validAdmins.find((a) => a.uid === adminId);
+  const validAdmins = sourceList.filter((a) => !isUserDeleted(a));
+  const admin = !isUserDeleted(adminId)
+    ? validAdmins.find((a) => a.uid === adminId || a.email.toLowerCase() === adminId.toLowerCase())
+    : null;
   const adminClips = clips.filter((c) => c.uploaderUid === admin?.uid && c.published);
   const totalDownloads = adminClips.reduce((acc, c) => acc + (c.downloadCount || 0), 0);
 
