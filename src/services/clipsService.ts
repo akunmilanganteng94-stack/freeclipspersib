@@ -54,32 +54,70 @@ const USERS_STORAGE_KEY = 'azryl_users_data';
 const SETTINGS_STORAGE_KEY = 'azryl_settings_data_v2';
 const DELETED_USERS_STORAGE_KEY = 'azryl_deleted_user_ids';
 
-// Persistent tracking of deleted admin UIDs so they never reappear
+// Permanent deleted admin identifiers to guarantee they never reappear on any browser
+export const PERMANENT_DELETED_IDENTIFIERS = [
+  'dadan-admin-uid',
+  'dadan@azrylclips.com',
+  'angga-admin-uid',
+  'angga@azrylclips.com',
+];
+
+// Persistent tracking of deleted admin UIDs and emails so they never reappear
 export function getDeletedUserIds(): Set<string> {
+  const set = new Set<string>();
+  PERMANENT_DELETED_IDENTIFIERS.forEach((id) => {
+    set.add(id);
+    set.add(id.toLowerCase());
+  });
+
   try {
     const raw = localStorage.getItem(DELETED_USERS_STORAGE_KEY);
     if (raw) {
       const arr = JSON.parse(raw);
       if (Array.isArray(arr)) {
-        return new Set(arr);
+        arr.forEach((id: string) => {
+          if (id) {
+            set.add(id);
+            set.add(String(id).toLowerCase());
+          }
+        });
       }
     }
   } catch (e) {}
-  return new Set<string>();
+  return set;
 }
 
-export function markUserDeleted(uid: string) {
+export function isUserDeleted(user: UserProfile | { uid?: string; email?: string } | string | null | undefined): boolean {
+  if (!user) return true;
+  const deletedSet = getDeletedUserIds();
+  if (typeof user === 'string') {
+    return deletedSet.has(user) || deletedSet.has(user.toLowerCase());
+  }
+  if (user.uid && (deletedSet.has(user.uid) || deletedSet.has(user.uid.toLowerCase()))) {
+    return true;
+  }
+  if (user.email && (deletedSet.has(user.email) || deletedSet.has(user.email.toLowerCase()))) {
+    return true;
+  }
+  return false;
+}
+
+export function markUserDeleted(identifier: string) {
+  if (!identifier) return;
   try {
     const set = getDeletedUserIds();
-    set.add(uid);
+    set.add(identifier);
+    set.add(identifier.toLowerCase());
     localStorage.setItem(DELETED_USERS_STORAGE_KEY, JSON.stringify(Array.from(set)));
   } catch (e) {}
 }
 
-export function unmarkUserDeleted(uid: string) {
+export function unmarkUserDeleted(identifier: string) {
+  if (!identifier) return;
   try {
     const set = getDeletedUserIds();
-    set.delete(uid);
+    set.delete(identifier);
+    set.delete(identifier.toLowerCase());
     localStorage.setItem(DELETED_USERS_STORAGE_KEY, JSON.stringify(Array.from(set)));
   } catch (e) {}
 }
@@ -146,11 +184,22 @@ export function getLocalClips(): ClipItem[] {
 export function saveLocalClips(clips: ClipItem[]) {
   try {
     localStorage.setItem(CLIPS_STORAGE_KEY, JSON.stringify(clips));
-  } catch (e) {}
+  } catch (e) {
+    console.warn('Local storage quota warning, saving sanitized clips:', e);
+    try {
+      // Purge any large base64 data URLs to protect local storage from crashing
+      const sanitized = clips.map((c) => ({
+        ...c,
+        primaryMediaUrl: c.primaryMediaUrl.startsWith('data:') ? DEFAULT_PERSIB_IMAGE : c.primaryMediaUrl,
+        photoOneUrl: c.photoOneUrl.startsWith('data:') ? DEFAULT_PERSIB_IMAGE : c.photoOneUrl,
+        photoTwoUrl: c.photoTwoUrl.startsWith('data:') ? DEFAULT_PERSIB_IMAGE : c.photoTwoUrl,
+      }));
+      localStorage.setItem(CLIPS_STORAGE_KEY, JSON.stringify(sanitized));
+    } catch (e2) {}
+  }
 }
 
 export function getLocalUsers(): UserProfile[] {
-  const deletedIds = getDeletedUserIds();
   try {
     const raw = localStorage.getItem(USERS_STORAGE_KEY);
     if (raw) {
@@ -158,7 +207,7 @@ export function getLocalUsers(): UserProfile[] {
       if (Array.isArray(parsed) && parsed.length > 0) {
         const userMap = new Map<string, UserProfile>();
         INITIAL_USERS.forEach((u) => {
-          if (!deletedIds.has(u.uid)) {
+          if (!isUserDeleted(u)) {
             userMap.set(u.uid, {
               ...u,
               profileImage: sanitizeMediaUrl(u.profileImage),
@@ -166,7 +215,7 @@ export function getLocalUsers(): UserProfile[] {
           }
         });
         parsed.forEach((u) => {
-          if (!deletedIds.has(u.uid)) {
+          if (!isUserDeleted(u)) {
             const current = userMap.get(u.uid);
             userMap.set(u.uid, {
               ...current,
@@ -175,20 +224,25 @@ export function getLocalUsers(): UserProfile[] {
             });
           }
         });
-        return Array.from(userMap.values());
+        const cleanUsers = Array.from(userMap.values()).filter((u) => !isUserDeleted(u));
+        localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(cleanUsers));
+        return cleanUsers;
       }
     }
   } catch (e) {}
-  return INITIAL_USERS.filter((u) => !deletedIds.has(u.uid)).map((u) => ({
+  const fallback = INITIAL_USERS.filter((u) => !isUserDeleted(u)).map((u) => ({
     ...u,
     profileImage: sanitizeMediaUrl(u.profileImage),
   }));
+  try {
+    localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(fallback));
+  } catch (e) {}
+  return fallback;
 }
 
 export function saveLocalUsers(users: UserProfile[]) {
   try {
-    const deletedIds = getDeletedUserIds();
-    const cleanUsers = users.filter((u) => !deletedIds.has(u.uid));
+    const cleanUsers = users.filter((u) => !isUserDeleted(u));
     localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(cleanUsers));
   } catch (e) {}
 }
@@ -393,82 +447,92 @@ export function subscribeToClips(callback: (clips: ClipItem[]) => void): () => v
 }
 
 /**
- * Subscribe to all admins & users
+ * Subscribe to all admins & users with real-time interval synchronization across all devices
  */
 export function subscribeToUsers(callback: (users: UserProfile[]) => void): () => void {
   // Register in userSubscribers for immediate local updates
   userSubscribers.add(callback);
 
-  // Synchronously emit current local users immediately with 0ms latency
+  // Synchronously emit current cleansed local users immediately
   try {
     callback(getLocalUsers());
   } catch (syncErr) {
     console.warn('Initial users emit warning:', syncErr);
   }
 
-  // 1. Sync server deleted admins so any deleted admin is removed across all browsers & devices
-  fetch('/api/admin/deleted-admins')
-    .then((r) => (r.ok ? r.json() : null))
-    .then((deletedUids) => {
-      if (Array.isArray(deletedUids) && deletedUids.length > 0) {
-        let changed = false;
-        const currentDeleted = getDeletedUserIds();
-        deletedUids.forEach((uid: string) => {
-          if (!currentDeleted.has(uid)) {
-            markUserDeleted(uid);
-            changed = true;
+  // Periodic synchronization from server (every 2.5 seconds) so any deleted or added admin
+  // instantly reflects on EVERY device and visitor in real time
+  const syncServerUsers = async () => {
+    try {
+      // 1. Fetch server deleted admins list and permanently mark them locally
+      const delResp = await fetch('/api/admin/deleted-admins');
+      if (delResp.ok) {
+        const deletedUids = await delResp.json();
+        if (Array.isArray(deletedUids) && deletedUids.length > 0) {
+          let newlyDeleted = false;
+          deletedUids.forEach((id: string) => {
+            if (id && !isUserDeleted(id)) {
+              markUserDeleted(id);
+              newlyDeleted = true;
+            }
+          });
+          if (newlyDeleted) {
+            const cleanLocal = getLocalUsers();
+            saveLocalUsers(cleanLocal);
+            callback(cleanLocal);
           }
-        });
-        if (changed) {
-          const cleanLocal = getLocalUsers();
-          saveLocalUsers(cleanLocal);
-          callback(cleanLocal);
         }
       }
-    })
-    .catch(() => {});
 
-  // 2. Sync server-persisted admins asynchronously
-  fetch('/api/admin/list-admins')
-    .then((r) => (r.ok ? r.json() : null))
-    .then((serverAdmins) => {
-      if (Array.isArray(serverAdmins) && serverAdmins.length > 0) {
-        const deletedIds = getDeletedUserIds();
-        const currentLocal = getLocalUsers();
-        const userMap = new Map<string, UserProfile>();
-        currentLocal.forEach((u) => {
-          if (!deletedIds.has(u.uid)) userMap.set(u.uid, u);
-        });
-        serverAdmins.forEach((sa) => {
-          if (!deletedIds.has(sa.uid)) {
-            userMap.set(sa.uid, { ...userMap.get(sa.uid), ...sa, profileImage: sanitizeMediaUrl(sa.profileImage) });
-          }
-        });
-        const merged = Array.from(userMap.values());
-        saveLocalUsers(merged);
-        callback(merged);
+      // 2. Fetch authoritative list of admins from server
+      const listResp = await fetch('/api/admin/list-admins');
+      if (listResp.ok) {
+        const serverAdmins = await listResp.json();
+        if (Array.isArray(serverAdmins)) {
+          const userMap = new Map<string, UserProfile>();
+          // Base Owner
+          INITIAL_USERS.forEach((u) => {
+            if (!isUserDeleted(u)) userMap.set(u.uid, u);
+          });
+          // Server admins
+          serverAdmins.forEach((sa: UserProfile) => {
+            if (!isUserDeleted(sa)) {
+              userMap.set(sa.uid, {
+                ...userMap.get(sa.uid),
+                ...sa,
+                profileImage: sanitizeMediaUrl(sa.profileImage),
+              });
+            }
+          });
+          const merged = Array.from(userMap.values()).filter((u) => !isUserDeleted(u));
+          saveLocalUsers(merged);
+          callback(merged);
+        }
       }
-    })
-    .catch(() => {});
+    } catch (e) {}
+  };
 
+  syncServerUsers();
+  const intervalId = setInterval(syncServerUsers, 2500);
+
+  // Firestore snapshot listener
   try {
     const usersCol = collection(db, 'users');
     const unsubscribe = onSnapshot(
       usersCol,
       (snapshot) => {
-        const deletedIds = getDeletedUserIds();
         const userMap = new Map<string, UserProfile>();
 
-        // 1. Initial default users
+        // 1. Initial default users (Owner)
         INITIAL_USERS.forEach((u) => {
-          if (!deletedIds.has(u.uid)) {
+          if (!isUserDeleted(u)) {
             userMap.set(u.uid, u);
           }
         });
 
-        // 2. Existing local users (preserves newly created admins!)
+        // 2. Existing local users
         getLocalUsers().forEach((u) => {
-          if (!deletedIds.has(u.uid)) {
+          if (!isUserDeleted(u)) {
             userMap.set(u.uid, { ...userMap.get(u.uid), ...u });
           }
         });
@@ -476,13 +540,15 @@ export function subscribeToUsers(callback: (users: UserProfile[]) => void): () =
         // 3. Firestore snapshot documents
         if (!snapshot.empty) {
           snapshot.forEach((d) => {
-            if (!deletedIds.has(d.id)) {
-              userMap.set(d.id, { ...userMap.get(d.id), ...d.data(), uid: d.id } as UserProfile);
+            const data = d.data() as UserProfile;
+            const fullUser = { ...data, uid: d.id };
+            if (!isUserDeleted(fullUser)) {
+              userMap.set(d.id, fullUser);
             }
           });
         }
 
-        const merged = Array.from(userMap.values());
+        const merged = Array.from(userMap.values()).filter((u) => !isUserDeleted(u));
         saveLocalUsers(merged);
         callback(merged);
       },
@@ -491,14 +557,17 @@ export function subscribeToUsers(callback: (users: UserProfile[]) => void): () =
         callback(getLocalUsers());
       }
     );
+
     return () => {
       userSubscribers.delete(callback);
+      clearInterval(intervalId);
       unsubscribe();
     };
   } catch (err) {
     callback(getLocalUsers());
     return () => {
       userSubscribers.delete(callback);
+      clearInterval(intervalId);
     };
   }
 }
@@ -578,6 +647,7 @@ export async function compressImageToDataUrl(file: File, maxDim = 1600, quality 
 
 /**
  * Upload a media file permanently so it is 100% public, persistent, and never errors
+ * Supports HD video clips (MP4/WebM/MOV up to 250MB) and high-res photos
  */
 export async function uploadMediaFile(
   file: File,
@@ -586,20 +656,43 @@ export async function uploadMediaFile(
 ): Promise<string> {
   if (onProgress) onProgress(15);
 
+  // 1. Primary method: Direct binary FormData streaming to backend server (Permanent /uploads/, 0% memory bloat)
+  try {
+    const formData = new FormData();
+    formData.append('file', file, file.name);
+    formData.append('filename', file.name);
+
+    if (onProgress) onProgress(35);
+    const resp = await fetch('/api/upload-media', {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (resp.ok) {
+      const json = await resp.json();
+      if (json && json.url) {
+        if (onProgress) onProgress(100);
+        return json.url;
+      }
+    }
+  } catch (formDataErr) {
+    console.warn('Backend FormData upload notice, attempting fallback methods:', formDataErr);
+  }
+
+  if (onProgress) onProgress(50);
+
+  // 2. Base64 payload fallback (with compression for images)
   let dataUrl = '';
   try {
-    if (file.type.startsWith('image/')) {
+    if (file.type.startsWith('image/') || /\.(jpg|jpeg|png|webp)$/i.test(file.name)) {
       dataUrl = await compressImageToDataUrl(file, 1600, 0.88);
-    } else {
+    } else if (file.size < 40 * 1024 * 1024) {
       dataUrl = await readFileAsDataUrl(file);
     }
   } catch (err) {
     console.warn('Failed to read file as data url:', err);
   }
 
-  if (onProgress) onProgress(45);
-
-  // 1. Try uploading to backend /api/upload-media endpoint (saves to permanent public /uploads/)
   if (dataUrl) {
     try {
       const resp = await fetch('/api/upload-media', {
@@ -619,11 +712,11 @@ export async function uploadMediaFile(
         }
       }
     } catch (apiErr) {
-      console.warn('Backend upload notice, attempting Firebase Storage:', apiErr);
+      console.warn('Backend base64 upload notice, attempting Firebase Storage:', apiErr);
     }
   }
 
-  // 2. Try Firebase Storage if backend is unreachable
+  // 3. Try Firebase Storage if backend is unreachable
   try {
     const storageRef = ref(storage, storagePath);
     const uploadTask = uploadBytesResumable(storageRef, file);
@@ -637,7 +730,7 @@ export async function uploadMediaFile(
         'state_changed',
         (snapshot) => {
           if (snapshot.totalBytes > 0 && onProgress) {
-            const pct = Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 50) + 45;
+            const pct = Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 40) + 55;
             onProgress(Math.min(95, pct));
           }
         },
@@ -665,18 +758,17 @@ export async function uploadMediaFile(
 
   if (onProgress) onProgress(100);
 
-  // 3. Guaranteed permanent fallback:
-  // Base64 data URL is 100% self-contained and universally viewable by any user/browser.
-  if (dataUrl) {
+  // 4. Guaranteed fallback for photos or small files:
+  if (dataUrl && (file.type.startsWith('image/') || dataUrl.length < 3 * 1024 * 1024)) {
     return dataUrl;
   }
 
-  // Final fallback to default official Persib Bobotoh banner/image
+  // Final fallback
   return DEFAULT_PERSIB_IMAGE;
 }
 
 /**
- * Publish a new clip (Admin/Owner action) - optimized for instant loading & auto-refresh
+ * Publish a new clip (Admin/Owner action) - optimized for instant loading, persistence & auto-refresh
  */
 export async function createNewClip(clipData: Omit<ClipItem, 'clipId' | 'downloadCount' | 'likeCount' | 'createdAt'>): Promise<ClipItem> {
   const clipId = `clip_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
@@ -691,20 +783,24 @@ export async function createNewClip(clipData: Omit<ClipItem, 'clipId' | 'downloa
     updatedAt: now,
   };
 
-  // 1. Save locally immediately so it renders instantly
+  // 1. Save to backend server API FIRST so it's written permanently to data/clips.json
+  try {
+    await fetch('/api/clips/save', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newClip),
+    });
+  } catch (serverErr) {
+    console.warn('Server clip save notice:', serverErr);
+  }
+
+  // 2. Save locally immediately so it renders instantly
   const current = getLocalClips();
-  const updated = [newClip, ...current];
+  const updated = [newClip, ...current.filter((c) => c.clipId !== clipId)];
   saveLocalClips(updated);
 
-  // 2. Refresh all React listeners automatically with 0ms delay!
+  // 3. Refresh all React listeners automatically with 0ms delay!
   notifyClipsSubscribers();
-
-  // 3. Save to backend server API
-  fetch('/api/clips/save', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(newClip),
-  }).catch(() => {});
 
   // 4. Save to Firestore asynchronously in background
   try {
@@ -837,30 +933,46 @@ export async function saveUserProfile(user: UserProfile): Promise<void> {
 
 /**
  * Delete Admin user profile (Owner action) - guarantees immediate & permanent deletion
+ * across all devices, visitors, database, server storage, and authentication.
  */
-export async function deleteUserProfile(uid: string): Promise<void> {
-  // 1. Mark as permanently deleted so it never resurrects from INITIAL_USERS or stale cache
+export async function deleteUserProfile(uid: string, email?: string): Promise<void> {
+  // 1. Mark both UID and email as permanently deleted so it never resurrects anywhere
   markUserDeleted(uid);
+  if (email) {
+    markUserDeleted(email.toLowerCase());
+  }
 
   // 2. Remove immediately from local storage cache
   const current = getLocalUsers();
-  const updated = current.filter((u) => u.uid !== uid);
+  const updated = current.filter(
+    (u) => u.uid !== uid && (!email || u.email.toLowerCase() !== email.toLowerCase())
+  );
   saveLocalUsers(updated);
 
-  // 3. Immediately notify all React components so the admin card vanishes instantly
+  // 3. Immediately notify all React components so the admin card vanishes instantly (0ms)
   notifyUsersSubscribers();
 
-  // 4. Notify backend server
-  fetch('/api/admin/delete-admin', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ uid }),
-  }).catch(() => {});
+  // 4. Notify backend server to permanently remove from data/admins.json and append to data/deleted_admins.json
+  try {
+    await fetch('/api/admin/delete-admin', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ uid, email }),
+    });
+  } catch (apiErr) {
+    console.warn('Backend delete admin notification:', apiErr);
+  }
 
-  // 5. Delete from Firestore in background
+  // 5. Delete from Firestore in background and record in deleted_admins tombstone collection
   try {
     const userRef = doc(db, 'users', uid);
     await deleteDoc(userRef);
+    const tombstoneRef = doc(db, 'deleted_admins', uid);
+    await setDoc(tombstoneRef, {
+      uid,
+      email: email ? email.toLowerCase() : '',
+      deletedAt: new Date().toISOString(),
+    });
   } catch (err) {
     handleFirestoreError(err, OperationType.DELETE, `users/${uid}`);
   }
