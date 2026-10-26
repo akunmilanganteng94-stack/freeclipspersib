@@ -39,7 +39,7 @@ import {
   uploadMediaFile,
   createNewClip,
   getDeletedUserIds,
-  isUserDeleted,
+  safeFetchJson,
 } from '../services/clipsService';
 
 interface OwnerDashboardProps {
@@ -126,9 +126,10 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
     return clips.reduce((acc, c) => acc + (c.downloadCount || 0), 0);
   }, [clips]);
 
-  // Instant filtered admins list (excluding any permanently deleted IDs or emails)
+  // Instant filtered admins list (excluding any permanently deleted IDs)
   const currentAdmins = useMemo(() => {
-    return admins.filter((a) => !isUserDeleted(a));
+    const deletedIds = getDeletedUserIds();
+    return admins.filter((a) => !deletedIds.has(a.uid));
   }, [admins]);
 
   const activeAdminsCount = useMemo(() => {
@@ -185,7 +186,7 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
       let serverProfile: UserProfile | null = null;
 
       try {
-        const resp = await fetch('/api/admin/create-admin', {
+        const data = await safeFetchJson<any>('/api/admin/create-admin', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -200,14 +201,11 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
           }),
         });
 
-        if (resp.ok) {
-          const data = await resp.json();
-          if (data?.user) {
-            serverProfile = data.user;
-            adminUid = data.user.uid;
-          } else if (data?.uid) {
-            adminUid = data.uid;
-          }
+        if (data?.user) {
+          serverProfile = data.user;
+          adminUid = data.user.uid;
+        } else if (data?.uid) {
+          adminUid = data.uid;
         }
       } catch (backendErr) {
         console.warn('Backend admin create notification:', backendErr);
@@ -268,15 +266,15 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
       onShowToast('Akun Founder / Owner tidak dapat dihapus!', 'error');
       return;
     }
-    if (!window.confirm(`Hapus permanen akun admin "${admin.adminName}" (${admin.email})?\nTindakan ini tidak dapat dibatalkan dan akun akan terhapus selamanya dari seluruh sistem.`)) {
+    if (!window.confirm(`Hapus permanen akun admin "${admin.adminName}" (${admin.email})?\nTindakan ini tidak dapat dibatalkan.`)) {
       return;
     }
     try {
-      await deleteUserProfile(admin.uid, admin.email);
+      await deleteUserProfile(admin.uid);
       if (editingAdmin?.uid === admin.uid) {
         setEditingAdmin(null);
       }
-      onShowToast(`Akun admin ${admin.adminName} (${admin.email}) berhasil dihapus permanen!`, 'success');
+      onShowToast(`Akun admin ${admin.adminName} berhasil dihapus!`, 'success');
     } catch (err: any) {
       onShowToast('Gagal menghapus admin: ' + (err.message || 'Kesalahan sistem'), 'error');
     }
@@ -341,19 +339,11 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
       const photoOnePath = `clips/${userProfile?.uid || 'owner'}/${generatedSlug}/photo1_${photoOneFile.name}`;
       const photoTwoPath = `clips/${userProfile?.uid || 'owner'}/${generatedSlug}/photo2_${photoTwoFile.name}`;
 
-      const primaryUrl = await uploadMediaFile(primaryFile, primaryPath, (pct) =>
-        setUploadProgress(15 + Math.floor(pct * 0.35))
-      );
-      setUploadProgress(50);
-
-      const photoOneUrl = await uploadMediaFile(photoOneFile, photoOnePath, (pct) =>
-        setUploadProgress(50 + Math.floor(pct * 0.2))
-      );
-      setUploadProgress(70);
-
-      const photoTwoUrl = await uploadMediaFile(photoTwoFile, photoTwoPath, (pct) =>
-        setUploadProgress(70 + Math.floor(pct * 0.2))
-      );
+      const [primaryUrl, photoOneUrl, photoTwoUrl] = await Promise.all([
+        uploadMediaFile(primaryFile, primaryPath, (pct) => setUploadProgress(25 + Math.floor(pct * 0.35))),
+        uploadMediaFile(photoOneFile, photoOnePath, (pct) => setUploadProgress(40 + Math.floor(pct * 0.25))),
+        uploadMediaFile(photoTwoFile, photoTwoPath, (pct) => setUploadProgress(50 + Math.floor(pct * 0.35))),
+      ]);
 
       setUploadProgress(95);
       await createNewClip({
@@ -792,21 +782,6 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
                     onChange={(e) => {
                       const file = e.target.files?.[0];
                       if (!file) return;
-                      const isVideo = file.type.startsWith('video/') || /\.(mp4|webm|mov|m4v|mkv)$/i.test(file.name);
-                      const isImage = file.type.startsWith('image/') || /\.(jpg|jpeg|png|webp|gif|svg)$/i.test(file.name);
-
-                      if (primaryMediaType === 'video' && !isVideo) {
-                        onShowToast('Media utama harus berupa file video (MP4/WebM/MOV)!', 'error');
-                        return;
-                      }
-                      if (primaryMediaType === 'photo' && !isImage) {
-                        onShowToast('Media utama harus berupa file foto/gambar (JPG/PNG/WEBP)!', 'error');
-                        return;
-                      }
-                      if (file.size > 250 * 1024 * 1024) {
-                        onShowToast('Ukuran file maksimal 250MB!', 'error');
-                        return;
-                      }
                       setPrimaryFile(file);
                       setPrimaryPreview(URL.createObjectURL(file));
                     }}
@@ -847,11 +822,6 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
                       onChange={(e) => {
                         const file = e.target.files?.[0];
                         if (!file) return;
-                        const isImage = file.type.startsWith('image/') || /\.(jpg|jpeg|png|webp|gif|svg)$/i.test(file.name);
-                        if (!isImage) {
-                          onShowToast('Foto pendukung 1 wajib berupa file foto/gambar!', 'error');
-                          return;
-                        }
                         setPhotoOneFile(file);
                         setPhotoOnePreview(URL.createObjectURL(file));
                       }}
@@ -886,11 +856,6 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
                       onChange={(e) => {
                         const file = e.target.files?.[0];
                         if (!file) return;
-                        const isImage = file.type.startsWith('image/') || /\.(jpg|jpeg|png|webp|gif|svg)$/i.test(file.name);
-                        if (!isImage) {
-                          onShowToast('Foto pendukung 2 wajib berupa file foto/gambar!', 'error');
-                          return;
-                        }
                         setPhotoTwoFile(file);
                         setPhotoTwoPreview(URL.createObjectURL(file));
                       }}

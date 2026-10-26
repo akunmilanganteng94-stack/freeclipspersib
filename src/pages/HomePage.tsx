@@ -2,7 +2,8 @@ import React, { useState, useMemo } from 'react';
 import { Search, Flame, Video, X, Sparkles, Download, Users, ArrowRight, Smartphone } from 'lucide-react';
 import { ClipItem, UserProfile, SiteSettings } from '../types';
 import { ClipCard } from '../components/ClipCard';
-import { INITIAL_USERS, getDeletedUserIds, getLocalUsers, isUserDeleted } from '../services/clipsService';
+import { INITIAL_USERS, getDeletedUserIds, getLocalUsers } from '../services/clipsService';
+import heroStadiumBg from '../assets/images/hero_persib_stadium_1792849004095.jpg';
 
 interface HomePageProps {
   clips: ClipItem[];
@@ -47,15 +48,16 @@ export const HomePage: React.FC<HomePageProps> = ({ clips, admins, siteSettings,
 
   // Synchronized active admins (identically reflects additions, edits, and deletions)
   const activeAdmins = useMemo(() => {
+    const deletedIds = getDeletedUserIds();
     const sourceList = admins && admins.length > 0 ? admins : getLocalUsers();
     const userMap = new Map<string, UserProfile>();
 
     INITIAL_USERS.forEach((u) => {
-      if (!isUserDeleted(u)) userMap.set(u.uid, u);
+      if (!deletedIds.has(u.uid)) userMap.set(u.uid, u);
     });
 
     sourceList.forEach((u) => {
-      if (!isUserDeleted(u)) {
+      if (!deletedIds.has(u.uid)) {
         userMap.set(u.uid, {
           ...(userMap.get(u.uid) || {}),
           ...u,
@@ -63,7 +65,7 @@ export const HomePage: React.FC<HomePageProps> = ({ clips, admins, siteSettings,
       }
     });
 
-    return Array.from(userMap.values()).filter((u) => !isUserDeleted(u) && u.active !== false);
+    return Array.from(userMap.values()).filter((u) => !deletedIds.has(u.uid) && u.active !== false);
   }, [admins]);
 
   return (
@@ -73,7 +75,7 @@ export const HomePage: React.FC<HomePageProps> = ({ clips, admins, siteSettings,
         {/* Subtle stadium backdrop image */}
         <div className="absolute inset-0 opacity-15 pointer-events-none mix-blend-overlay">
           <img
-            src="/src/assets/images/hero_persib_stadium_1792849004095.jpg"
+            src={heroStadiumBg}
             alt="Persib Stadium Background"
             className="w-full h-full object-cover"
           />

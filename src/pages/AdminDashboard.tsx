@@ -112,19 +112,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ clips, onNavigat
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const isVideo = file.type.startsWith('video/') || /\.(mp4|webm|mov|m4v|mkv)$/i.test(file.name);
-    const isImage = file.type.startsWith('image/') || /\.(jpg|jpeg|png|webp|gif|svg)$/i.test(file.name);
-
-    if (primaryMediaType === 'video' && !isVideo) {
-      onShowToast('Media utama harus berupa file video (MP4/WebM/MOV)!', 'error');
+    if (primaryMediaType === 'video' && !file.type.startsWith('video/')) {
+      onShowToast('Media utama harus berupa file video (MP4/WebM)!', 'error');
       return;
     }
-    if (primaryMediaType === 'photo' && !isImage) {
-      onShowToast('Media utama harus berupa file foto/gambar (JPG/PNG/WEBP)!', 'error');
+    if (primaryMediaType === 'photo' && !file.type.startsWith('image/')) {
+      onShowToast('Media utama harus berupa file foto/gambar!', 'error');
       return;
     }
-    if (file.size > 250 * 1024 * 1024) {
-      onShowToast('Ukuran file maksimal 250MB!', 'error');
+    if (file.size > 100 * 1024 * 1024) {
+      onShowToast('Ukuran file maksimal 100MB!', 'error');
       return;
     }
 
@@ -135,8 +132,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ clips, onNavigat
   const handlePhotoOneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const isImage = file.type.startsWith('image/') || /\.(jpg|jpeg|png|webp|gif|svg)$/i.test(file.name);
-    if (!isImage) {
+    if (!file.type.startsWith('image/')) {
       onShowToast('Foto pendukung pertama wajib berupa foto/gambar!', 'error');
       return;
     }
@@ -147,8 +143,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ clips, onNavigat
   const handlePhotoTwoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const isImage = file.type.startsWith('image/') || /\.(jpg|jpeg|png|webp|gif|svg)$/i.test(file.name);
-    if (!isImage) {
+    if (!file.type.startsWith('image/')) {
       onShowToast('Foto pendukung kedua wajib berupa foto/gambar!', 'error');
       return;
     }
@@ -214,25 +209,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ clips, onNavigat
       const randomCode = Math.floor(100 + Math.random() * 900);
       const generatedSlug = `${adminPrefix}-${randomCode}`;
 
-      // Upload all 3 media files sequentially for maximum mobile stability & accurate progress
-      setUploadProgress(15);
+      // Upload all 3 media files simultaneously in parallel for lightning-fast publishing
+      setUploadProgress(25);
       const primaryPath = `clips/${userProfile?.uid}/${generatedSlug}/primary_${primaryFile.name}`;
       const photoOnePath = `clips/${userProfile?.uid}/${generatedSlug}/photo1_${photoOneFile.name}`;
       const photoTwoPath = `clips/${userProfile?.uid}/${generatedSlug}/photo2_${photoTwoFile.name}`;
 
-      const primaryUrl = await uploadMediaFile(primaryFile, primaryPath, (pct) =>
-        setUploadProgress(15 + Math.floor(pct * 0.35))
-      );
-      setUploadProgress(50);
-
-      const photoOneUrl = await uploadMediaFile(photoOneFile, photoOnePath, (pct) =>
-        setUploadProgress(50 + Math.floor(pct * 0.2))
-      );
-      setUploadProgress(70);
-
-      const photoTwoUrl = await uploadMediaFile(photoTwoFile, photoTwoPath, (pct) =>
-        setUploadProgress(70 + Math.floor(pct * 0.2))
-      );
+      const [primaryUrl, photoOneUrl, photoTwoUrl] = await Promise.all([
+        uploadMediaFile(primaryFile, primaryPath, (pct) => setUploadProgress(25 + Math.floor(pct * 0.35))),
+        uploadMediaFile(photoOneFile, photoOnePath, (pct) => setUploadProgress(40 + Math.floor(pct * 0.25))),
+        uploadMediaFile(photoTwoFile, photoTwoPath, (pct) => setUploadProgress(50 + Math.floor(pct * 0.35))),
+      ]);
 
       // Save Clip in Database
       setUploadProgress(95);
