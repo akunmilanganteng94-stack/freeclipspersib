@@ -65,18 +65,43 @@ export const ClipCard: React.FC<ClipCardProps> = ({ clip, rank, onNavigate, onSh
         setLocalDownloads(updated);
       }
 
-      // 2. Trigger direct download via proxy to ensure attachment download
+      // 2. Direct client download (works for data URLs, remote CDN URLs, and local server)
       const ext = clip.primaryMediaType === 'video' ? 'mp4' : 'jpg';
       const cleanSlug = clip.slug || 'persib-clip';
       const filename = `${cleanSlug}_utama.${ext}`;
-      const downloadProxyUrl = `/api/download?url=${encodeURIComponent(clip.primaryMediaUrl)}&filename=${encodeURIComponent(filename)}`;
+      const mediaUrl = clip.primaryMediaUrl;
 
-      const link = document.createElement('a');
-      link.href = downloadProxyUrl;
-      link.setAttribute('download', filename);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      if (mediaUrl.startsWith('data:')) {
+        const link = document.createElement('a');
+        link.href = mediaUrl;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      } else if (mediaUrl.startsWith('http://') || mediaUrl.startsWith('https://')) {
+        try {
+          const res = await fetch(mediaUrl);
+          const blob = await res.blob();
+          const blobUrl = URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = blobUrl;
+          link.download = filename;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
+        } catch {
+          window.open(mediaUrl, '_blank');
+        }
+      } else {
+        const downloadProxyUrl = `/api/download?url=${encodeURIComponent(mediaUrl)}&filename=${encodeURIComponent(filename)}`;
+        const link = document.createElement('a');
+        link.href = downloadProxyUrl;
+        link.setAttribute('download', filename);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      }
 
       onShowToast('Unduhan berhasil dimulai! 💙', 'success');
     } catch (err) {
