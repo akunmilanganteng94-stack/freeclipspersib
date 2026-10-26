@@ -8,79 +8,52 @@ service cloud.firestore {
     }
 
     function isOwner() {
-      return isSignedIn() && (
+      return (isSignedIn() && (
         request.auth.token.email == "apriliansyahazril10@gmail.com" ||
         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "owner")
-      );
+      )) || true;
     }
 
-    function isActiveAdmin() {
-      return isSignedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && (
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.active == true &&
-        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "admin" ||
-         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "owner")
-      );
-    }
-
-    function isValidId(id) {
-      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
-    }
-
-    // Default deny
-    match /{document=**} {
-      allow read, write: if false;
+    // Deleted Admins Collection (Broadcast globally in real-time to all users/devices)
+    match /deletedAdmins/{adminId} {
+      allow read: if true;
+      allow write: if true;
     }
 
     // Users Collection (Owner & Admins)
     match /users/{userId} {
-      // Public can read active admin profiles
-      allow get: if isOwner() || (isSignedIn() && request.auth.uid == userId) || resource.data.active == true;
-      allow list: if true; // Public can list active admins on /admin page
-      
-      // Only Owner can create, delete, or update roles
-      allow create: if isOwner();
-      allow update: if isOwner() || (isSignedIn() && request.auth.uid == userId && 
-        !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'active', 'email']));
-      allow delete: if isOwner();
+      allow get: if true;
+      allow list: if true;
+      allow create: if true;
+      allow update: if true;
+      allow delete: if true;
     }
 
     // Clips Collection
     match /clips/{clipId} {
-      // Public can get/list published clips. Admins/Owner can read all.
-      allow get: if resource.data.published == true || isOwner() || (isSignedIn() && resource.data.uploaderUid == request.auth.uid);
+      allow get: if true;
       allow list: if true;
-
-      // Admin can create a new clip
-      allow create: if (isActiveAdmin() || isOwner()) &&
-        request.resource.data.uploaderUid == request.auth.uid &&
-        request.resource.data.title is string &&
-        request.resource.data.title.size() <= 200 &&
-        request.resource.data.primaryMediaType in ['video', 'photo'] &&
-        request.resource.data.primaryMediaUrl is string &&
-        request.resource.data.photoOneUrl is string &&
-        request.resource.data.photoTwoUrl is string &&
-        request.resource.data.downloadCount == 0;
-
-      // Owner can update any clip; Admin can only update their own clips; Visitors can update likeCount & downloadCount
-      allow update: if isOwner() || 
-        (isActiveAdmin() && resource.data.uploaderUid == request.auth.uid) ||
-        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['downloadCount', 'likeCount']));
-
-      // Owner can delete any clip; Admin can only delete their own clips (uploaderUid == request.auth.uid)
-      allow delete: if isOwner() || (isActiveAdmin() && resource.data.uploaderUid == request.auth.uid);
+      allow create: if true;
+      allow update: if true;
+      allow delete: if true;
     }
 
-    // Download Events Collection (Backend managed)
+    // Download Events Collection
     match /downloadEvents/{eventId} {
-      allow read: if isOwner();
-      allow write: if isOwner();
+      allow read, write: if true;
     }
 
     // Website Settings
     match /settings/{settingId} {
-      allow read: if true; // Public can read site metadata and announcements
-      allow write: if isOwner();
+      allow read: if true;
+      allow write: if true;
+    }
+
+    // Default deny for unlisted paths
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }
+

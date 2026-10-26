@@ -5,7 +5,6 @@ import JSZip from 'jszip';
 import dotenv from 'dotenv';
 
 import fs from 'fs';
-import multer from 'multer';
 
 dotenv.config();
 
@@ -24,76 +23,36 @@ const uploadsDir = path.join(__dirname, 'public', 'uploads');
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
 }
-app.use('/uploads', express.static(uploadsDir, { acceptRanges: true }));
+app.use('/uploads', express.static(uploadsDir));
 
-// Configure multer storage for direct streaming file uploads (handles videos up to 250MB & photos without memory spikes)
-const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => {
-    cb(null, uploadsDir);
-  },
-  filename: (_req, file, cb) => {
-    const ext = path.extname(file.originalname) || (file.mimetype?.includes('video') ? '.mp4' : '.jpg');
-    const safeBase = file.originalname.replace(/[^a-zA-Z0-9_\-]/g, '_').replace(/\.[^/.]+$/, '');
-    cb(null, `${Date.now()}_${safeBase}${ext}`);
-  },
-});
-
-const upload = multer({
-  storage,
-  limits: { fileSize: 250 * 1024 * 1024 }, // 250MB maximum
-});
-
-// Media Upload API: Handles both direct FormData binary streaming and base64 payloads
-app.post('/api/upload-media', (req: Request, res: Response, next) => {
-  upload.single('file')(req, res, (err) => {
-    if (err) {
-      console.warn('Multer upload warning:', err.message);
-      // If error is file size limit
-      if (err.code === 'LIMIT_FILE_SIZE') {
-        return res.status(400).json({ error: 'Ukuran file melebihi batas 250MB' });
-      }
-    }
-    next();
-  });
-}, async (req: Request, res: Response) => {
+// Media Upload API: Saves uploaded clips and avatars permanently to public/uploads
+app.post('/api/upload-media', async (req: Request, res: Response) => {
   try {
-    // 1. Direct file upload from FormData
-    if (req.file) {
-      const publicUrl = `/uploads/${req.file.filename}`;
-      return res.json({
-        success: true,
-        url: publicUrl,
-        filename: req.file.filename,
-        size: req.file.size,
-      });
-    }
-
-    // 2. Base64 payload fallback
     const { filename, base64Data, contentType } = req.body;
-    if (base64Data && filename) {
-      const cleanBase64 = base64Data.replace(/^data:[^;]+;base64,/, '');
-      const buffer = Buffer.from(cleanBase64, 'base64');
-
-      const ext = path.extname(filename) || (contentType?.includes('video') ? '.mp4' : '.jpg');
-      const safeBase = filename.replace(/[^a-zA-Z0-9_\-]/g, '_').replace(/\.[^/.]+$/, '');
-      const uniqueFilename = `${Date.now()}_${safeBase}${ext}`;
-      const filePath = path.join(uploadsDir, uniqueFilename);
-
-      await fs.promises.writeFile(filePath, buffer);
-      const publicUrl = `/uploads/${uniqueFilename}`;
-
-      return res.json({
-        success: true,
-        url: publicUrl,
-        filename: uniqueFilename,
-        size: buffer.length,
-      });
+    if (!base64Data || !filename) {
+      return res.status(400).json({ error: 'File data and filename are required' });
     }
 
-    return res.status(400).json({ error: 'File atau data media wajib disertakan' });
+    const cleanBase64 = base64Data.replace(/^data:[^;]+;base64,/, '');
+    const buffer = Buffer.from(cleanBase64, 'base64');
+
+    const ext = path.extname(filename) || (contentType?.includes('video') ? '.mp4' : '.jpg');
+    const safeBase = filename.replace(/[^a-zA-Z0-9_\-]/g, '_').replace(/\.[^/.]+$/, '');
+    const uniqueFilename = `${Date.now()}_${safeBase}${ext}`;
+    const filePath = path.join(uploadsDir, uniqueFilename);
+
+    await fs.promises.writeFile(filePath, buffer);
+    const publicUrl = `/uploads/${uniqueFilename}`;
+
+    return res.json({
+      success: true,
+      url: publicUrl,
+      filename: uniqueFilename,
+      size: buffer.length,
+    });
   } catch (err: any) {
     console.error('Server upload error:', err);
-    return res.status(500).json({ error: err.message || 'Gagal menyimpan file media ke server' });
+    return res.status(500).json({ error: err.message || 'Failed to save media file' });
   }
 });
 
@@ -340,32 +299,23 @@ function saveDeletedAdminUids(uids: string[]) {
 }
 
 function getStoredAdmins(): any[] {
-  const deleted = new Set(getDeletedAdminUids().map((s) => s.toLowerCase()));
   try {
     if (fs.existsSync(adminsFile)) {
       const content = fs.readFileSync(adminsFile, 'utf-8');
       const parsed = JSON.parse(content);
       if (Array.isArray(parsed)) {
-        return parsed.filter(
-          (a) => !deleted.has(String(a.uid).toLowerCase()) && !deleted.has(String(a.email).toLowerCase())
-        );
+        return parsed;
       }
     }
   } catch (err) {
     console.error('Error reading admins.json:', err);
   }
-  return DEFAULT_SERVER_ADMINS.filter(
-    (a) => !deleted.has(String(a.uid).toLowerCase()) && !deleted.has(String(a.email).toLowerCase())
-  );
+  return DEFAULT_SERVER_ADMINS;
 }
 
 function saveStoredAdmins(admins: any[]) {
   try {
-    const deleted = new Set(getDeletedAdminUids().map((s) => s.toLowerCase()));
-    const cleanAdmins = admins.filter(
-      (a) => !deleted.has(String(a.uid).toLowerCase()) && !deleted.has(String(a.email).toLowerCase())
-    );
-    fs.writeFileSync(adminsFile, JSON.stringify(cleanAdmins, null, 2), 'utf-8');
+    fs.writeFileSync(adminsFile, JSON.stringify(admins, null, 2), 'utf-8');
   } catch (err) {
     console.error('Error writing admins.json:', err);
   }
@@ -523,29 +473,22 @@ app.get('/api/admin/deleted-admins', (_req: Request, res: Response) => {
 // 6. Delete Admin from Server (persist to deleted_admins.json and remove from admins.json)
 app.post('/api/admin/delete-admin', (req: Request, res: Response) => {
   try {
-    const { uid, email } = req.body;
-    if (!uid && !email) return res.status(400).json({ error: 'UID or email is required' });
+    const { uid } = req.body;
+    if (!uid) return res.status(400).json({ error: 'UID is required' });
     
-    // Add to deleted admins list (both UID and clean email)
+    // Add to deleted admins list
     const deleted = getDeletedAdminUids();
-    if (uid && !deleted.includes(uid)) {
+    if (!deleted.includes(uid)) {
       deleted.push(uid);
+      saveDeletedAdminUids(deleted);
     }
-    if (email && !deleted.includes(String(email).trim().toLowerCase())) {
-      deleted.push(String(email).trim().toLowerCase());
-    }
-    saveDeletedAdminUids(deleted);
 
-    // Remove from stored admins permanently
+    // Remove from stored admins
     const stored = getStoredAdmins();
-    const filtered = stored.filter((a) => {
-      if (uid && a.uid === uid) return false;
-      if (email && a.email && a.email.toLowerCase() === String(email).trim().toLowerCase()) return false;
-      return true;
-    });
+    const filtered = stored.filter((a) => a.uid !== uid);
     saveStoredAdmins(filtered);
     
-    return res.json({ success: true, deletedUid: uid, deletedEmail: email });
+    return res.json({ success: true, deletedUid: uid });
   } catch (err: any) {
     return res.status(500).json({ error: err.message });
   }
@@ -558,9 +501,7 @@ app.post('/api/admin/update-admin', (req: Request, res: Response) => {
     if (!uid) return res.status(400).json({ error: 'UID is required' });
     
     // Unmark from deleted if it was somehow marked
-    const deleted = getDeletedAdminUids().filter(
-      (id) => id !== uid && (!updates?.email || id.toLowerCase() !== String(updates.email).toLowerCase())
-    );
+    const deleted = getDeletedAdminUids().filter((id) => id !== uid);
     saveDeletedAdminUids(deleted);
 
     const stored = getStoredAdmins();
@@ -592,17 +533,9 @@ app.post('/api/admin/verify-login', (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Email and password are required' });
     }
     const cleanEmail = String(email).trim().toLowerCase();
-    const deleted = new Set(getDeletedAdminUids().map((s) => s.toLowerCase()));
-    
-    // If admin is in deleted list, completely block login
-    if (deleted.has(cleanEmail)) {
-      return res.status(403).json({ error: 'Akun admin ini telah dihapus permanen oleh Owner dan tidak dapat digunakan lagi.' });
-    }
-
+    const deleted = new Set(getDeletedAdminUids());
     const stored = getStoredAdmins();
-    const found = stored.find(
-      (a) => !deleted.has(a.uid.toLowerCase()) && !deleted.has(a.email.toLowerCase()) && a.email.toLowerCase() === cleanEmail && a.password === String(password)
-    );
+    const found = stored.find((a) => !deleted.has(a.uid) && a.email.toLowerCase() === cleanEmail && a.password === String(password));
 
     if (found) {
       if (!found.active) {
